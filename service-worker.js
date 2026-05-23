@@ -1,6 +1,6 @@
 /* === Magic Fruit Splash Breaker - Service Worker === */
 /* 改版時記得把 CACHE_VERSION 升號，強制更新快取。 */
-const CACHE_VERSION = 'mfsb-v1.0.0';
+const CACHE_VERSION = 'mfsb-v1.0.1';
 const PRECACHE = [
   './',
   './index.html',

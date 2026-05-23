@@ -984,8 +984,18 @@
     if (state === STATE.PLAYING) togglePause();
   });
 
-  // ===== Canvas 響應式（高 DPI） =====
+  // ===== Canvas 響應式（高 DPI + 自動 fit） =====
   function fitCanvas() {
+    const stage = canvas.parentElement;
+    const availW = stage.clientWidth;
+    const availH = stage.clientHeight;
+    const aspect = W / H; // 0.6
+    let dispW = availW;
+    let dispH = availW / aspect;
+    if (dispH > availH) { dispH = availH; dispW = dispH * aspect; }
+    canvas.style.width  = dispW + 'px';
+    canvas.style.height = dispH + 'px';
+
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width  = W * dpr;
     canvas.height = H * dpr;
@@ -993,6 +1003,7 @@
   }
   fitCanvas();
   window.addEventListener('resize', fitCanvas);
+  window.addEventListener('orientationchange', fitCanvas);
 
   // ===== 啟動 =====
   showOverlay(titleScreen);
