@@ -1,0 +1,228 @@
+/* === Magic Fruit Splash Breaker - 樣式 === */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: linear-gradient(180deg, #ffe0b2 0%, #ffccbc 60%, #b3e5fc 100%);
+  font-family: "Comic Sans MS", "Microsoft JhengHei", "Apple LiGothic", "PingFang TC", "Helvetica Neue", sans-serif;
+  color: #4e342e;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* === HUD === */
+.hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: max(env(safe-area-inset-top), 8px) 12px 8px;
+  gap: 8px;
+  z-index: 5;
+  position: relative;
+}
+
+.hud-left, .hud-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge {
+  background: rgba(255, 255, 255, 0.85);
+  border: 3px solid #fff;
+  border-radius: 18px;
+  padding: 6px 12px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #5d4037;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+}
+
+.badge.lives { background: rgba(255, 235, 238, 0.95); }
+
+.icon-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  background: rgba(255, 255, 255, 0.85);
+  font-size: 22px;
+  cursor: pointer;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.12);
+  display: grid;
+  place-items: center;
+  transition: transform 0.1s;
+}
+.icon-btn:active { transform: scale(0.92); }
+
+/* === 舞台與 Canvas === */
+#stage {
+  position: relative;
+  flex: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+#game-canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: 100%;
+  aspect-ratio: 540 / 900;
+  border-radius: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  background: linear-gradient(180deg, #fff3e0 0%, #ffe0b2 60%, #ffccbc 100%);
+  touch-action: none;
+}
+
+/* === 浮動暫停按鈕 === */
+.floating-btn {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  background: rgba(255, 255, 255, 0.85);
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.12);
+  z-index: 4;
+}
+.floating-btn:active { transform: scale(0.92); }
+
+/* === 覆蓋畫面（標題、過關等） === */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(255, 248, 225, 0.92) 0%, rgba(179, 229, 252, 0.92) 100%);
+  border-radius: 24px;
+  z-index: 3;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(28px, 6vw, 44px);
+  color: #d84315;
+  text-shadow: 3px 3px 0 #fff, -3px -3px 0 #fff, -3px 3px 0 #fff, 3px -3px 0 #fff;
+  line-height: 1.2;
+}
+
+.big-text {
+  margin: 0;
+  font-size: clamp(36px, 8vw, 64px);
+  color: #d84315;
+  text-shadow: 3px 3px 0 #fff;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: clamp(16px, 3.5vw, 22px);
+  color: #5d4037;
+}
+
+.mode-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(360px, 90%);
+  margin-top: 8px;
+}
+
+.big-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 18px;
+  border: 4px solid #fff;
+  border-radius: 22px;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 18px;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.15);
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+.big-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.15);
+}
+.big-btn .emoji { font-size: 32px; line-height: 1; }
+.big-btn .btn-title { font-size: 22px; }
+.big-btn .btn-desc { font-size: 14px; opacity: 0.95; font-weight: 500; }
+
+.big-btn.easy       { background: linear-gradient(180deg, #66bb6a, #43a047); }
+.big-btn.challenge  { background: linear-gradient(180deg, #ff7043, #e64a19); }
+.big-btn.confirm    { background: linear-gradient(180deg, #42a5f5, #1e88e5); padding: 14px 28px; }
+
+.ghost-btn {
+  background: transparent;
+  border: 3px solid #6d4c41;
+  color: #5d4037;
+  padding: 10px 22px;
+  border-radius: 18px;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+}
+.ghost-btn:active { transform: scale(0.96); }
+
+.hint {
+  font-size: 14px;
+  color: #6d4c41;
+  margin-top: 4px;
+}
+
+/* === Footer === */
+#footer {
+  text-align: center;
+  padding: 6px 8px max(env(safe-area-inset-bottom), 6px);
+  font-size: 12px;
+  color: #6d4c41;
+  opacity: 0.75;
+}
+
+/* === Helpers === */
+.hidden { display: none !important; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* 小螢幕（避免過寬內邊距） */
+@media (max-width: 420px) {
+  .badge { font-size: 14px; padding: 5px 10px; }
+  .icon-btn, .floating-btn { width: 40px; height: 40px; font-size: 18px; }
+}

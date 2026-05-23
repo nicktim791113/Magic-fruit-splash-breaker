@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Magic Fruit Splash Breaker 🍉</title>
+  <meta name="description" content="可愛主題的網頁打磚塊遊戲：滑動擋板，打掉磚塊、水球與水果，清光 5 個關卡！" />
+  <meta name="theme-color" content="#ff7043" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="./assets/icons/icon.svg" />
+  <link rel="apple-touch-icon" href="./assets/icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Fruit Breaker" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- 頂部 HUD -->
+    <header id="hud" class="hud hidden">
+      <div class="hud-left">
+        <span id="level-badge" class="badge">第 1 關</span>
+        <span id="score-badge" class="badge">分數 0</span>
+      </div>
+      <div class="hud-right">
+        <span id="lives-badge" class="badge lives">❤️❤️❤️❤️❤️</span>
+        <button id="mute-btn" class="icon-btn" aria-label="切換音效">🔊</button>
+      </div>
+    </header>
+
+    <!-- 主畫面 / 遊戲畫布 -->
+    <main id="stage">
+      <canvas id="game-canvas" width="540" height="900"></canvas>
+
+      <!-- 開始畫面 -->
+      <section id="title-screen" class="overlay">
+        <h1 class="title">🧱🍉 Magic Fruit<br/>Splash Breaker 💧</h1>
+        <p class="subtitle">滑動擋板、打掉磚塊、水球與水果！</p>
+        <div class="mode-buttons">
+          <button class="big-btn easy" data-mode="easy">
+            <span class="emoji">🌈</span>
+            <span class="btn-title">輕鬆模式</span>
+            <span class="btn-desc">無限重生，玩到爽</span>
+          </button>
+          <button class="big-btn challenge" data-mode="challenge">
+            <span class="emoji">⭐</span>
+            <span class="btn-title">挑戰模式</span>
+            <span class="btn-desc">5 顆愛心，看你能撐到幾關</span>
+          </button>
+        </div>
+        <p class="hint">提示：手機用手指拖曳，電腦用滑鼠或 ← → 鍵</p>
+      </section>
+
+      <!-- 過關畫面 -->
+      <section id="clear-screen" class="overlay hidden">
+        <h2 class="big-text">🎉 過關！</h2>
+        <p id="clear-info" class="subtitle"></p>
+        <button id="next-level-btn" class="big-btn confirm">下一關 →</button>
+      </section>
+
+      <!-- 全破畫面 -->
+      <section id="victory-screen" class="overlay hidden">
+        <h2 class="big-text">🏆 全部過關！</h2>
+        <p id="victory-info" class="subtitle">你超棒！</p>
+        <button id="play-again-btn" class="big-btn confirm">再玩一次</button>
+      </section>
+
+      <!-- Game Over -->
+      <section id="gameover-screen" class="overlay hidden">
+        <h2 class="big-text">💔 愛心用完了</h2>
+        <p id="gameover-info" class="subtitle">沒關係，再試一次！</p>
+        <button id="retry-btn" class="big-btn confirm">再試一次</button>
+        <button id="back-title-btn" class="ghost-btn">回主畫面</button>
+      </section>
+
+      <!-- 暫停 -->
+      <section id="pause-screen" class="overlay hidden">
+        <h2 class="big-text">⏸ 暫停</h2>
+        <button id="resume-btn" class="big-btn confirm">繼續</button>
+        <button id="quit-btn" class="ghost-btn">回主畫面</button>
+      </section>
+
+      <!-- 暫停按鈕（遊戲中） -->
+      <button id="pause-btn" class="floating-btn hidden" aria-label="暫停">⏸</button>
+    </main>
+
+    <footer id="footer">
+      <small>用手指或滑鼠移動擋板 · ESC 暫停</small>
+    </footer>
+  </div>
+
+  <script src="./js/game.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
