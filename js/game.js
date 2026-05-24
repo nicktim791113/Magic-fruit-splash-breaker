@@ -125,12 +125,12 @@
   const BLOCK_H = BLOCK_W * 0.55;
 
   // ===== 球與擋板 =====
-  const BALL_R = 11;
-  const PADDLE_W_BASE = 130;
-  const PADDLE_H = 20;
-  const PADDLE_Y = H - 70;
+  const BALL_R = 12;
+  const PADDLE_W_BASE = 140;
+  const PADDLE_H = 26;
+  const PADDLE_Y = H - 110;  // 從底部抬高，避免太貼視窗底
   const PADDLE_COLOR_TOP = '#ffca28';
-  const PADDLE_COLOR_BTM = '#f57c00';
+  const PADDLE_COLOR_BTM = '#e65100';
 
   const ball = {
     x: W / 2,
@@ -681,18 +681,26 @@
 
   function drawPaddle() {
     const x = paddle.x, y = paddle.y, w = paddle.w, h = paddle.h;
-    // 陰影
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';
-    roundRect(ctx, x + 2, y + 4, w, h, 12); ctx.fill();
+    // 陰影（加深）
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    roundRect(ctx, x + 3, y + 6, w, h, 14); ctx.fill();
+    // 深色描邊（讓擋板更顯眼）
+    ctx.fillStyle = '#bf360c';
+    roundRect(ctx, x - 2, y - 2, w + 4, h + 4, 16); ctx.fill();
     // 主體漸層
     const g = ctx.createLinearGradient(0, y, 0, y + h);
     g.addColorStop(0, PADDLE_COLOR_TOP);
     g.addColorStop(1, PADDLE_COLOR_BTM);
     ctx.fillStyle = g;
-    roundRect(ctx, x, y, w, h, 12); ctx.fill();
+    roundRect(ctx, x, y, w, h, 14); ctx.fill();
     // 亮邊
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    roundRect(ctx, x + 6, y + 3, w - 12, 4, 4); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    roundRect(ctx, x + 8, y + 4, w - 16, 6, 4); ctx.fill();
+    // 中央小錨點（讓正中央位置可被看見）
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.beginPath();
+    ctx.arc(x + w / 2, y + h / 2, 3, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   function drawBall() {
@@ -987,12 +995,19 @@
   // ===== Canvas 響應式（高 DPI + 自動 fit） =====
   function fitCanvas() {
     const stage = canvas.parentElement;
-    const availW = stage.clientWidth;
-    const availH = stage.clientHeight;
+    const rect = stage.getBoundingClientRect();
+    // 多扣 6px 緩衝，避免擠到視窗邊
+    const availW = Math.max(0, rect.width  - 6);
+    const availH = Math.max(0, rect.height - 6);
+    if (availW <= 10 || availH <= 10) return;
     const aspect = W / H; // 0.6
-    let dispW = availW;
-    let dispH = availW / aspect;
-    if (dispH > availH) { dispH = availH; dispW = dispH * aspect; }
+    // 先以可用高度為基準，再 fit 寬度（保證高度不超過 stage）
+    let dispH = availH;
+    let dispW = dispH * aspect;
+    if (dispW > availW) {
+      dispW = availW;
+      dispH = dispW / aspect;
+    }
     canvas.style.width  = dispW + 'px';
     canvas.style.height = dispH + 'px';
 
@@ -1004,6 +1019,12 @@
   fitCanvas();
   window.addEventListener('resize', fitCanvas);
   window.addEventListener('orientationchange', fitCanvas);
+  // 用 ResizeObserver 跟蹤 stage 變化（更可靠，layout 完成後會自動觸發）
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(() => fitCanvas()).observe(canvas.parentElement);
+  }
+  // 雙保險：layout 完成後再 fit 一次
+  requestAnimationFrame(fitCanvas);
 
   // ===== 啟動 =====
   showOverlay(titleScreen);
