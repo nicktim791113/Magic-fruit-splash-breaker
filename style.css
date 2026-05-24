@@ -200,6 +200,90 @@ html, body {
   margin-top: 4px;
 }
 
+/* === 開發者模式 === */
+.dev-link {
+  margin-top: 4px;
+  background: transparent;
+  border: 2px dashed rgba(93, 64, 55, 0.4);
+  color: #5d4037;
+  padding: 6px 14px;
+  border-radius: 14px;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.dev-link:hover { opacity: 1; }
+.dev-link:active { transform: scale(0.96); }
+
+.dev-overlay {
+  background: linear-gradient(180deg, rgba(255, 248, 225, 0.96) 0%, rgba(207, 216, 220, 0.96) 100%);
+  gap: 14px;
+  padding: 18px;
+  overflow-y: auto;
+}
+
+.dev-title {
+  margin: 0;
+  font-size: clamp(24px, 5vw, 32px);
+  color: #37474f;
+  text-shadow: 2px 2px 0 #fff;
+}
+
+.dev-group {
+  width: min(420px, 92%);
+  background: rgba(255, 255, 255, 0.7);
+  border: 2px solid rgba(55, 71, 79, 0.15);
+  border-radius: 16px;
+  padding: 12px 14px;
+}
+
+.dev-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: #37474f;
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
+}
+
+.seg-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.seg-btn {
+  flex: 1 1 60px;
+  min-width: 60px;
+  padding: 8px 10px;
+  border: 2px solid #b0bec5;
+  background: #fff;
+  color: #455a64;
+  border-radius: 10px;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: transform 0.06s, background 0.1s, color 0.1s;
+}
+.seg-btn:hover { background: #eceff1; }
+.seg-btn:active { transform: scale(0.95); }
+.seg-btn.active {
+  background: linear-gradient(180deg, #29b6f6, #0277bd);
+  color: #fff;
+  border-color: #01579b;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.12);
+}
+
+.dev-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(420px, 92%);
+  margin-top: 4px;
+}
+
 /* === Footer === */
 #footer {
   text-align: center;

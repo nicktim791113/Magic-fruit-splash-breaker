@@ -42,6 +42,7 @@
   let levelIndex = 0;
   let score = 0;
   let lives = 5;
+  let speedMultiplier = 1; // 開發者模式可調整
 
   // ===== 關卡資料 =====
   // 字元意義： .空 / B磚 / W水球 / F西瓜 / S草莓 / O橘子
@@ -311,7 +312,8 @@
     ball.x = paddle.x + paddle.w / 2;
     ball.y = paddle.y - ball.r - 4;
     const angle = -Math.PI / 2 + rand(-0.3, 0.3); // 約垂直向上、略偏
-    const s = speed || LEVELS[levelIndex].speed;
+    const baseSpeed = speed || LEVELS[levelIndex].speed;
+    const s = baseSpeed * speedMultiplier;
     ball.vx = Math.cos(angle) * s;
     ball.vy = Math.sin(angle) * s;
     ball.speed = s;
@@ -853,7 +855,8 @@
 
   // ===== UI 控制 =====
   function updateHUD() {
-    levelBadge.textContent = `第 ${levelIndex + 1} 關`;
+    const devTag = (speedMultiplier !== 1) ? ` · ⚙️${speedMultiplier}×` : '';
+    levelBadge.textContent = `第 ${levelIndex + 1} 關${devTag}`;
     scoreBadge.textContent = `分數 ${score}`;
     if (gameMode === 'challenge') {
       livesBadge.classList.remove('hidden');
@@ -864,7 +867,9 @@
   }
 
   function hideAllOverlays() {
-    [titleScreen, clearScreen, victoryScreen, gameOverScreen, pauseScreen].forEach(o => o.classList.add('hidden'));
+    [titleScreen, clearScreen, victoryScreen, gameOverScreen, pauseScreen,
+     document.getElementById('dev-screen')]
+      .forEach(o => o && o.classList.add('hidden'));
   }
   function showOverlay(el) {
     hideAllOverlays();
@@ -876,10 +881,24 @@
     gameMode = mode;
     score = 0;
     lives = 5;
+    speedMultiplier = 1; // 正常模式回到 1×
     hideAllOverlays();
     hud.classList.remove('hidden');
     pauseBtn.classList.remove('hidden');
     loadLevel(0);
+    ensureAudio();
+  }
+
+  function startGameDev(mode, levelIdx, speedMul) {
+    SFX.button();
+    gameMode = mode;
+    score = 0;
+    lives = 5;
+    speedMultiplier = speedMul;
+    hideAllOverlays();
+    hud.classList.remove('hidden');
+    pauseBtn.classList.remove('hidden');
+    loadLevel(Math.max(0, Math.min(LEVELS.length - 1, levelIdx)));
     ensureAudio();
   }
 
@@ -919,6 +938,39 @@
   // 模式選擇
   document.querySelectorAll('.mode-buttons .big-btn').forEach(btn => {
     btn.addEventListener('click', () => startGame(btn.dataset.mode));
+  });
+
+  // 開發者模式
+  const devScreen = document.getElementById('dev-screen');
+  const devLevelGroup = document.getElementById('dev-level-group');
+  const devSpeedGroup = document.getElementById('dev-speed-group');
+  const devModeGroup  = document.getElementById('dev-mode-group');
+  let devLevel = 0, devSpeed = 1, devMode = 'easy';
+
+  function makeSegHandler(group, onPick) {
+    group.querySelectorAll('.seg-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        SFX.button();
+        group.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        onPick(btn);
+      });
+    });
+  }
+  makeSegHandler(devLevelGroup, btn => { devLevel = parseInt(btn.dataset.level, 10) || 0; });
+  makeSegHandler(devSpeedGroup, btn => { devSpeed = parseFloat(btn.dataset.speed) || 1; });
+  makeSegHandler(devModeGroup,  btn => { devMode = btn.dataset.devmode || 'easy'; });
+
+  document.getElementById('dev-mode-btn').addEventListener('click', () => {
+    SFX.button();
+    showOverlay(devScreen);
+  });
+  document.getElementById('dev-back-btn').addEventListener('click', () => {
+    SFX.button();
+    showOverlay(titleScreen);
+  });
+  document.getElementById('dev-start-btn').addEventListener('click', () => {
+    startGameDev(devMode, devLevel, devSpeed);
   });
   document.getElementById('next-level-btn').addEventListener('click', goToNextLevel);
   document.getElementById('play-again-btn').addEventListener('click', () => { score = 0; lives = 5; loadLevel(0); hideAllOverlays(); });

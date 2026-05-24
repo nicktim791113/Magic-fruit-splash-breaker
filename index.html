@@ -49,6 +49,48 @@
           </button>
         </div>
         <p class="hint">提示：手機用手指拖曳，電腦用滑鼠或 ← → 鍵</p>
+        <button id="dev-mode-btn" class="dev-link">⚙️ 開發者模式</button>
+      </section>
+
+      <!-- 開發者模式畫面 -->
+      <section id="dev-screen" class="overlay hidden dev-overlay">
+        <h2 class="dev-title">⚙️ 開發者模式</h2>
+        <p class="subtitle">快速測試任何關卡與球速</p>
+
+        <div class="dev-group">
+          <label class="dev-label">起始關卡</label>
+          <div class="seg-group" id="dev-level-group">
+            <button class="seg-btn active" data-level="0">第 1 關</button>
+            <button class="seg-btn" data-level="1">第 2 關</button>
+            <button class="seg-btn" data-level="2">第 3 關</button>
+            <button class="seg-btn" data-level="3">第 4 關</button>
+            <button class="seg-btn" data-level="4">第 5 關</button>
+          </div>
+        </div>
+
+        <div class="dev-group">
+          <label class="dev-label">球速倍率</label>
+          <div class="seg-group" id="dev-speed-group">
+            <button class="seg-btn" data-speed="0.5">0.5×</button>
+            <button class="seg-btn active" data-speed="1">1×</button>
+            <button class="seg-btn" data-speed="1.5">1.5×</button>
+            <button class="seg-btn" data-speed="2">2×</button>
+            <button class="seg-btn" data-speed="3">3×</button>
+          </div>
+        </div>
+
+        <div class="dev-group">
+          <label class="dev-label">遊戲模式</label>
+          <div class="seg-group" id="dev-mode-group">
+            <button class="seg-btn active" data-devmode="easy">🌈 輕鬆</button>
+            <button class="seg-btn" data-devmode="challenge">⭐ 挑戰</button>
+          </div>
+        </div>
+
+        <div class="dev-actions">
+          <button id="dev-start-btn" class="big-btn confirm">🚀 開始</button>
+          <button id="dev-back-btn" class="ghost-btn">← 返回主畫面</button>
+        </div>
       </section>
 
       <!-- 過關畫面 -->
