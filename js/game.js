@@ -45,9 +45,30 @@
   let speedMultiplier = 1; // 開發者模式可調整
 
   // ===== 關卡資料 =====
-  // 字元意義： .空 / B磚 / W水球 / F西瓜 / S草莓 / O橘子
+  // 字元意義：
+  //   . 空 / B 磚塊 / W 水球 / F 西瓜 / S 草莓 / O 橘子
+  //   H 鋼磚(3hp) / X 不可破 / G 寶石+100 / ? 神秘箱(隨機道具)
+  //   N 隱藏磚 / Z 加速磚
   // 寬度建議 12 欄
   const COLS = 12;
+  const MATERIALS = {
+    '.': null,
+    'B': { type: 'brick',         hp: 1 },
+    'W': { type: 'water',         hp: 1 },
+    'F': { type: 'watermelon',    hp: 2 },
+    'S': { type: 'strawberry',    hp: 2 },
+    'O': { type: 'orange',        hp: 2 },
+    'H': { type: 'steel',         hp: 3 },
+    'X': { type: 'indestructible',hp: 999 },
+    'G': { type: 'gem',           hp: 1 },
+    '?': { type: 'mystery',       hp: 1 },
+    'N': { type: 'hidden',        hp: 1, hidden: true },
+    'Z': { type: 'speedup',       hp: 1 },
+  };
+  const MAT_EMOJI = {
+    'B':'🟥','W':'💧','F':'🍉','S':'🍓','O':'🍊',
+    'H':'🛡️','X':'⛔','G':'💎','?':'🎁','N':'🌑','Z':'⚡','.':'⬜',
+  };
   const LEVELS = [
     {
       name: '第 1 關 · 暖身',
@@ -226,6 +247,21 @@
   /** @type {Array<{x:number,y:number,text:string,life:number,maxLife:number,color:string}>} */
   const floatTexts = [];
 
+  // 道具（從神秘箱掉落）
+  /** @type {Array<{x:number,y:number,vy:number,type:string,r:number}>} */
+  const powerups = [];
+
+  // 額外球（多球道具會 spawn）
+  /** @type {Array<{x:number,y:number,vx:number,vy:number,r:number,speed:number}>} */
+  const extraBalls = [];
+
+  // 效果計時器（秒）
+  const fx = { paddleWideT: 0, slowT: 0, doubleT: 0 };
+
+  // 當前關卡資料（含主題）
+  let currentLevel = null;
+  let bgTheme = 'warm';
+
   // ===== 輸入控制 =====
   let pointerActive = false;
   let pointerX = 0;
@@ -340,10 +376,19 @@
   }
 
   // ===== 關卡載入 =====
-  function loadLevel(idx) {
+  // 從 idx 載入正式或自製關卡。levelIndex < 0 代表「試玩」狀態。
+  // lvOverride 可直接傳入一個 {name, speed, grid} 物件做臨時關卡
+  function loadLevel(idx, lvOverride) {
     levelIndex = idx;
-    const lv = LEVELS[idx];
+    const lv = lvOverride || LEVELS[idx] || getCustomLevelByIndex(idx);
+    if (!lv) return;
+    currentLevel = lv;
     targets = [];
+    powerups.length = 0;
+    extraBalls.length = 0;
+    fx.paddleWideT = 0;
+    fx.slowT = 0;
+    fx.doubleT = 0;
     const rows = lv.grid;
     const totalH = rows.length * (BLOCK_H + BLOCK_GAP) - BLOCK_GAP;
     const offsetY = BLOCK_AREA_TOP + Math.max(0, ((BLOCK_AREA_BOTTOM - BLOCK_AREA_TOP) * 0.18));
@@ -351,24 +396,40 @@
       const row = rows[r];
       for (let c = 0; c < COLS && c < row.length; c++) {
         const ch = row[c];
-        if (ch === '.') continue;
+        const mat = MATERIALS[ch];
+        if (!mat) continue;
         const x = PLAY_AREA.left + BLOCK_GAP + c * (BLOCK_W + BLOCK_GAP);
         const y = offsetY + r * (BLOCK_H + BLOCK_GAP);
-        let type = 'brick', hp = 1;
-        if (ch === 'B') { type = 'brick';      hp = 1; }
-        else if (ch === 'W') { type = 'water'; hp = 1; }
-        else if (ch === 'F') { type = 'watermelon'; hp = 2; }
-        else if (ch === 'S') { type = 'strawberry'; hp = 2; }
-        else if (ch === 'O') { type = 'orange';     hp = 2; }
         targets.push({
           x, y, w: BLOCK_W, h: BLOCK_H,
-          type, hp, maxHp: hp, dead: false, fadeT: 0,
+          type: mat.type, hp: mat.hp, maxHp: mat.hp,
+          dead: false, fadeT: 0,
+          hidden: !!mat.hidden,
           colorSeed: (r * 7 + c * 13) % 360,
         });
       }
     }
+    bgTheme = lv.theme || 'warm';
     resetBall(lv.speed);
     updateHUD();
+  }
+
+  // 從 editor 取啟用中的自製關卡
+  function getEnabledCustomLevels() {
+    return (window.MFSB_EDITOR && typeof window.MFSB_EDITOR.getEnabledCustomLevels === 'function')
+      ? window.MFSB_EDITOR.getEnabledCustomLevels() : [];
+  }
+
+  // 自製關卡：依「正式 10 關 + 啟用中的自製關卡序列」對 idx 取關卡
+  function getCustomLevelByIndex(idx) {
+    const enabled = getEnabledCustomLevels();
+    const customIdx = idx - LEVELS.length;
+    if (customIdx >= 0 && customIdx < enabled.length) return enabled[customIdx];
+    return null;
+  }
+
+  function totalLevelCount() {
+    return LEVELS.length + getEnabledCustomLevels().length;
   }
 
   function resetBall(speed) {
@@ -417,82 +478,117 @@
     if (keysPressed.left)  paddle.x -= paddleSpeed * dt;
     if (keysPressed.right) paddle.x += paddleSpeed * dt;
     if (pointerActive) {
-      // 緩動朝指針位置移動，比較滑順
       const target = pointerX - paddle.w / 2;
       paddle.x += (target - paddle.x) * Math.min(1, dt * 18);
     }
     paddle.x = clamp(paddle.x, PLAY_AREA.left, PLAY_AREA.right - paddle.w);
 
+    // 效果計時遞減
+    if (fx.paddleWideT > 0) {
+      fx.paddleWideT -= dt;
+      if (fx.paddleWideT <= 0) paddle.w = PADDLE_W_BASE;
+    }
+    if (fx.slowT > 0) fx.slowT -= dt;
+    if (fx.doubleT > 0) fx.doubleT -= dt;
+
     if (ball.stuck) {
       ball.x = paddle.x + paddle.w / 2;
       ball.y = paddle.y - ball.r - 4;
+      updatePowerups(dt);
       return;
     }
 
-    // 子步進行：避免高速穿牆
-    const steps = Math.ceil(Math.max(Math.abs(ball.vx), Math.abs(ball.vy)) * dt / 8);
-    const subDt = dt / Math.max(1, steps);
-    for (let s = 0; s < Math.max(1, steps); s++) stepBall(subDt);
+    // 主球
+    const stepsMain = Math.ceil(Math.max(Math.abs(ball.vx), Math.abs(ball.vy)) * dt / 8);
+    const subDtMain = dt / Math.max(1, stepsMain);
+    for (let s = 0; s < Math.max(1, stepsMain); s++) {
+      if (stepOneBall(ball, subDtMain, true)) break;
+    }
 
-    // 檢查過關
-    if (targets.every(t => t.dead)) onLevelClear();
+    // 額外球
+    for (let i = extraBalls.length - 1; i >= 0; i--) {
+      const b = extraBalls[i];
+      const steps = Math.ceil(Math.max(Math.abs(b.vx), Math.abs(b.vy)) * dt / 8);
+      const subDt = dt / Math.max(1, steps);
+      let lost = false;
+      for (let s = 0; s < Math.max(1, steps); s++) {
+        if (stepOneBall(b, subDt, false)) { lost = true; break; }
+      }
+      if (lost) extraBalls.splice(i, 1);
+    }
+
+    updatePowerups(dt);
+
+    // 檢查過關（不可破磚不算需清除）
+    if (targets.every(t => t.dead || t.type === 'indestructible')) onLevelClear();
   }
 
-  function stepBall(dt) {
-    ball.x += ball.vx * dt;
-    ball.y += ball.vy * dt;
+  // 推進單顆球。回傳 true 表示這顆球已落地（呼叫端決定處理方式）
+  function stepOneBall(b, dt, isPrimary) {
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
 
     // 牆壁
-    if (ball.x - ball.r < PLAY_AREA.left) {
-      ball.x = PLAY_AREA.left + ball.r;
-      ball.vx = Math.abs(ball.vx);
+    if (b.x - b.r < PLAY_AREA.left) {
+      b.x = PLAY_AREA.left + b.r;
+      b.vx = Math.abs(b.vx);
       SFX.wall();
-    } else if (ball.x + ball.r > PLAY_AREA.right) {
-      ball.x = PLAY_AREA.right - ball.r;
-      ball.vx = -Math.abs(ball.vx);
+    } else if (b.x + b.r > PLAY_AREA.right) {
+      b.x = PLAY_AREA.right - b.r;
+      b.vx = -Math.abs(b.vx);
       SFX.wall();
     }
-    if (ball.y - ball.r < PLAY_AREA.top + TOP_INFO_BAND - 10) {
-      ball.y = PLAY_AREA.top + TOP_INFO_BAND - 10 + ball.r;
-      ball.vy = Math.abs(ball.vy);
+    if (b.y - b.r < PLAY_AREA.top + TOP_INFO_BAND - 10) {
+      b.y = PLAY_AREA.top + TOP_INFO_BAND - 10 + b.r;
+      b.vy = Math.abs(b.vy);
       SFX.wall();
     }
 
     // 死亡線
-    if (ball.y - ball.r > H + 10) {
-      onBallLost();
-      return;
+    if (b.y - b.r > H + 10) {
+      if (isPrimary) {
+        // 若還有副球，從副球中選一顆升為主球
+        if (extraBalls.length > 0) {
+          const promoted = extraBalls.shift();
+          ball.x = promoted.x; ball.y = promoted.y;
+          ball.vx = promoted.vx; ball.vy = promoted.vy;
+          ball.speed = promoted.speed; ball.stuck = false;
+          addText(W/2, H - 240, '🔄 還有球！', '#7b1fa2');
+          return false;
+        }
+        onBallLost();
+      }
+      return true;
     }
 
     // 擋板碰撞
-    if (ball.vy > 0 &&
-        ball.y + ball.r >= paddle.y &&
-        ball.y - ball.r <= paddle.y + paddle.h &&
-        ball.x >= paddle.x - ball.r && ball.x <= paddle.x + paddle.w + ball.r) {
-      // 反彈角度依擊中位置
-      const hitPos = clamp((ball.x - (paddle.x + paddle.w / 2)) / (paddle.w / 2), -1, 1);
-      const bounceAngle = hitPos * (Math.PI / 3); // ±60 度
-      const speed = Math.hypot(ball.vx, ball.vy) || ball.speed;
-      const newSpeed = Math.max(speed, ball.speed);
-      ball.vx = Math.sin(bounceAngle) * newSpeed;
-      ball.vy = -Math.abs(Math.cos(bounceAngle) * newSpeed);
-      ball.y = paddle.y - ball.r - 0.5;
-      // 確保最小垂直速度
+    if (b.vy > 0 &&
+        b.y + b.r >= paddle.y &&
+        b.y - b.r <= paddle.y + paddle.h &&
+        b.x >= paddle.x - b.r && b.x <= paddle.x + paddle.w + b.r) {
+      const hitPos = clamp((b.x - (paddle.x + paddle.w / 2)) / (paddle.w / 2), -1, 1);
+      const bounceAngle = hitPos * (Math.PI / 3);
+      const speed = Math.hypot(b.vx, b.vy) || b.speed;
+      const newSpeed = Math.max(speed, b.speed);
+      b.vx = Math.sin(bounceAngle) * newSpeed;
+      b.vy = -Math.abs(Math.cos(bounceAngle) * newSpeed);
+      b.y = paddle.y - b.r - 0.5;
       const minVy = newSpeed * 0.42;
-      if (Math.abs(ball.vy) < minVy) ball.vy = -minVy;
+      if (Math.abs(b.vy) < minVy) b.vy = -minVy;
       SFX.paddle();
-      addParticles(ball.x, paddle.y, '#fff59d', 6, { speed: 140, life: 0.35, r: 3, gravity: 200 });
+      addParticles(b.x, paddle.y, '#fff59d', 6, { speed: 140, life: 0.35, r: 3, gravity: 200 });
     }
 
     // 目標碰撞
     for (const tg of targets) {
       if (tg.dead) continue;
-      if (collideCircleRect(ball, tg)) {
-        resolveCollision(ball, tg);
+      if (collideCircleRect(b, tg)) {
+        resolveCollision(b, tg);
         damageTarget(tg);
-        break; // 一個 substep 只撞一個，避免雙重反彈
+        break;
       }
     }
+    return false;
   }
 
   // 圓-矩形碰撞
@@ -537,6 +633,19 @@
   }
 
   function damageTarget(tg) {
+    // 不可破：純反彈、無傷害
+    if (tg.type === 'indestructible') {
+      SFX.wall();
+      return;
+    }
+    // 隱藏磚：第一次碰到「揭曉」，不算扣血
+    if (tg.hidden) {
+      tg.hidden = false;
+      SFX.fruitCrack();
+      addParticles(tg.x + tg.w / 2, tg.y + tg.h / 2, '#fff59d', 10,
+                   { speed: 220, life: 0.5, r: 3 });
+      return;
+    }
     tg.hp -= 1;
     if (tg.hp <= 0) {
       tg.dead = true;
@@ -566,17 +675,46 @@
       scoreGain = 10;
     } else if (tg.type === 'water') {
       SFX.waterball();
-      // 水花：藍系噴濺
       addParticles(cx, cy, '#4fc3f7', 22, { speed: 320, life: 0.7, r: 5, gravity: 800 });
       addParticles(cx, cy, '#b3e5fc', 16, { speed: 200, life: 0.6, r: 3, gravity: 600 });
       scoreGain = 15;
-    } else {
+    } else if (tg.type === 'watermelon' || tg.type === 'strawberry' || tg.type === 'orange') {
       SFX.fruitPop();
       const c = fruitJuiceColor(tg);
       addParticles(cx, cy, c, 26, { speed: 320, life: 0.75, r: 5, gravity: 700 });
       addParticles(cx, cy, '#fff59d', 8, { speed: 180, life: 0.5, r: 3 });
       scoreGain = 25;
+    } else if (tg.type === 'steel') {
+      SFX.brick();
+      addParticles(cx, cy, '#90a4ae', 18, { speed: 320, life: 0.6, r: 4 });
+      addParticles(cx, cy, '#eceff1', 10, { speed: 240, life: 0.5, r: 3 });
+      scoreGain = 40;
+    } else if (tg.type === 'gem') {
+      SFX.brick();
+      SFX.clear();
+      addParticles(cx, cy, '#42a5f5', 24, { speed: 380, life: 0.8, r: 5 });
+      addParticles(cx, cy, '#fff', 12, { speed: 260, life: 0.6, r: 3 });
+      scoreGain = 100;
+    } else if (tg.type === 'mystery') {
+      SFX.brick();
+      addParticles(cx, cy, `hsl(${(Date.now() / 10) % 360}, 80%, 60%)`, 22, { speed: 340, life: 0.7, r: 4 });
+      spawnPowerup(cx, cy);
+      scoreGain = 20;
+    } else if (tg.type === 'hidden') {
+      SFX.brick();
+      addParticles(cx, cy, '#7e57c2', 14, { speed: 260, life: 0.55, r: 4 });
+      scoreGain = 30; // 揭曉後再打一下才破，給更多分
+    } else if (tg.type === 'speedup') {
+      SFX.brick();
+      addParticles(cx, cy, '#ffeb3b', 18, { speed: 340, life: 0.55, r: 4 });
+      // 球加速 10%
+      ball.speed = Math.min(ball.speed * 1.1, 1200);
+      ball.vx *= 1.1; ball.vy *= 1.1;
+      for (const b of extraBalls) { b.speed = Math.min(b.speed * 1.1, 1200); b.vx *= 1.1; b.vy *= 1.1; }
+      addText(cx, cy - 14, '⚡ 加速！', '#ff6f00');
+      scoreGain = 20;
     }
+    if (fx.doubleT > 0) scoreGain *= 2;
     score += scoreGain;
     addText(cx, cy - 8, `+${scoreGain}`, '#d84315');
     updateHUD();
@@ -609,12 +747,23 @@
     SFX.clear();
     spawnFireworks();
     setTimeout(() => {
-      if (levelIndex + 1 >= LEVELS.length) {
+      // 試玩單張關卡：levelIndex === -1，過關後回編輯器
+      if (levelIndex === -1) {
+        state = STATE.TITLE;
+        if (window.MFSB_EDITOR && window.MFSB_EDITOR.onTestPlayEnd) {
+          window.MFSB_EDITOR.onTestPlayEnd(true, score);
+        }
+        return;
+      }
+      const total = totalLevelCount();
+      const nextIdx = levelIndex + 1;
+      if (nextIdx >= total) {
         state = STATE.VICTORY;
         showOverlay(victoryScreen);
         document.getElementById('victory-info').textContent = `最終分數：${score} 🎊`;
       } else {
-        clearInfo.textContent = `分數：${score}　準備迎接「${LEVELS[levelIndex + 1].name}」`;
+        const nextLv = LEVELS[nextIdx] || getCustomLevelByIndex(nextIdx);
+        clearInfo.textContent = `分數：${score}　準備迎接「${nextLv ? nextLv.name : '下一關'}」`;
         showOverlay(clearScreen);
       }
     }, 800);
@@ -642,6 +791,70 @@
       p.x += p.vx * dt;
       p.y += p.vy * dt;
     }
+  }
+
+  // ===== 道具系統 =====
+  const POWERUP_TYPES = ['wide', 'slow', 'multi', 'double', 'gem'];
+  const POWERUP_VISUAL = {
+    wide:   { emoji: '↔️', label: '擋板變寬', color: '#ffca28' },
+    slow:   { emoji: '🐢', label: '慢速球',   color: '#66bb6a' },
+    multi:  { emoji: '⚪', label: '多球',     color: '#ec407a' },
+    double: { emoji: '✖2', label: '雙倍分',   color: '#ab47bc' },
+    gem:    { emoji: '💎', label: '+50',     color: '#42a5f5' },
+  };
+
+  function spawnPowerup(x, y) {
+    const t = POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
+    powerups.push({ x, y, vy: 140, type: t, r: 14 });
+    addText(x, y - 20, '🎁 道具!', '#ab47bc');
+  }
+
+  function updatePowerups(dt) {
+    for (let i = powerups.length - 1; i >= 0; i--) {
+      const p = powerups[i];
+      p.y += p.vy * dt;
+      // 碰擋板？
+      if (p.y + p.r >= paddle.y && p.y - p.r <= paddle.y + paddle.h &&
+          p.x >= paddle.x - p.r && p.x <= paddle.x + paddle.w + p.r) {
+        applyPowerup(p);
+        powerups.splice(i, 1);
+        continue;
+      }
+      if (p.y > H + 30) powerups.splice(i, 1);
+    }
+  }
+
+  function applyPowerup(p) {
+    const v = POWERUP_VISUAL[p.type];
+    SFX.clear();
+    addText(W / 2, paddle.y - 40, `${v.emoji} ${v.label}`, v.color);
+    if (p.type === 'wide') {
+      fx.paddleWideT = 10;
+      paddle.w = PADDLE_W_BASE * 1.5;
+    } else if (p.type === 'slow') {
+      fx.slowT = 8;
+      // 把所有球速縮短到 0.7×（只調當下速度，下次擋板碰撞會用 ball.speed 計）
+      const apply = b => { b.vx *= 0.7; b.vy *= 0.7; b.speed *= 0.7; };
+      apply(ball); for (const b of extraBalls) apply(b);
+    } else if (p.type === 'multi') {
+      // 從主球的位置 spawn 兩顆額外球，左右兩個角度
+      const baseSpeed = ball.speed || 400;
+      for (let i = 0; i < 2; i++) {
+        const angle = -Math.PI / 2 + (i === 0 ? -0.6 : 0.6);
+        extraBalls.push({
+          x: ball.x, y: ball.y, r: ball.r,
+          vx: Math.cos(angle) * baseSpeed,
+          vy: Math.sin(angle) * baseSpeed,
+          speed: baseSpeed,
+        });
+      }
+    } else if (p.type === 'double') {
+      fx.doubleT = 10;
+    } else if (p.type === 'gem') {
+      score += 50;
+      addText(paddle.x + paddle.w / 2, paddle.y - 30, '+50', '#1976d2');
+    }
+    updateHUD();
   }
 
   function updateFloatTexts(dt) {
@@ -693,8 +906,12 @@
     // 擋板
     drawPaddle();
 
-    // 球
+    // 額外球
+    for (const b of extraBalls) drawBallAt(b);
+    // 主球
     drawBall();
+    // 道具
+    for (const p of powerups) drawPowerup(p);
 
     // 粒子
     for (const p of particles) {
@@ -770,34 +987,65 @@
     ctx.fill();
   }
 
-  function drawBall() {
+  function drawBall() { drawBallAt(ball); }
+  function drawBallAt(b) {
     ctx.save();
-    ctx.translate(ball.x, ball.y);
+    ctx.translate(b.x, b.y);
     // 陰影
     ctx.fillStyle = 'rgba(0,0,0,0.18)';
-    ctx.beginPath(); ctx.arc(1.5, 3, ball.r, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(1.5, 3, b.r, 0, Math.PI * 2); ctx.fill();
     // 球體
-    const g = ctx.createRadialGradient(-3, -3, 2, 0, 0, ball.r);
+    const g = ctx.createRadialGradient(-3, -3, 2, 0, 0, b.r);
     g.addColorStop(0, '#fff');
     g.addColorStop(0.5, '#ffeb3b');
     g.addColorStop(1, '#ef6c00');
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(0, 0, ball.r, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, b.r, 0, Math.PI * 2); ctx.fill();
     // 高光
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.beginPath(); ctx.arc(-3.5, -3.5, ball.r * 0.32, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-3.5, -3.5, b.r * 0.32, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawPowerup(p) {
+    const v = POWERUP_VISUAL[p.type];
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    // 外殼
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath(); ctx.arc(1, 2, p.r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = v.color;
+    ctx.beginPath(); ctx.arc(0, 0, p.r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(0, 0, p.r, 0, Math.PI * 2); ctx.stroke();
+    // 圖示
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${p.r * 1.2}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(v.emoji, 0, 1);
     ctx.restore();
   }
 
   function drawTarget(tg) {
+    if (tg.hidden) { drawHiddenTarget(tg); return; }
     const cx = tg.x + tg.w / 2;
     const cy = tg.y + tg.h / 2;
-    if (tg.type === 'brick')      drawBrick(tg);
-    else if (tg.type === 'water') drawWater(tg);
-    else                          drawFruit(tg);
+    if (tg.type === 'brick')              drawBrick(tg);
+    else if (tg.type === 'water')         drawWater(tg);
+    else if (tg.type === 'watermelon' ||
+             tg.type === 'strawberry' ||
+             tg.type === 'orange')        drawFruit(tg);
+    else if (tg.type === 'steel')         drawSteel(tg);
+    else if (tg.type === 'indestructible')drawIndestructible(tg);
+    else if (tg.type === 'gem')           drawGem(tg);
+    else if (tg.type === 'mystery')       drawMystery(tg);
+    else if (tg.type === 'speedup')       drawSpeedup(tg);
+    else if (tg.type === 'hidden')        drawBrick(tg); // 揭曉後當磚
 
-    // 受傷裂痕
-    if (tg.hp < tg.maxHp) {
+    // 受傷裂痕（鋼磚與多 hp 目標）
+    if (tg.hp < tg.maxHp && tg.type !== 'indestructible') {
       ctx.strokeStyle = 'rgba(255,255,255,0.85)';
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -820,6 +1068,130 @@
     roundRect(ctx, tg.x, tg.y, tg.w, tg.h, 8); ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.45)';
     roundRect(ctx, tg.x + 4, tg.y + 3, tg.w - 8, 5, 3); ctx.fill();
+  }
+
+  function drawSteel(tg) {
+    // 金屬鋼磚
+    const g = ctx.createLinearGradient(tg.x, tg.y, tg.x, tg.y + tg.h);
+    g.addColorStop(0, '#cfd8dc');
+    g.addColorStop(0.5, '#90a4ae');
+    g.addColorStop(1, '#546e7a');
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    roundRect(ctx, tg.x + 1, tg.y + 3, tg.w, tg.h, 6); ctx.fill();
+    ctx.fillStyle = g;
+    roundRect(ctx, tg.x, tg.y, tg.w, tg.h, 6); ctx.fill();
+    // 鉚釘
+    ctx.fillStyle = '#37474f';
+    [0.18, 0.82].forEach(fx => {
+      [0.25, 0.75].forEach(fy => {
+        ctx.beginPath();
+        ctx.arc(tg.x + tg.w * fx, tg.y + tg.h * fy, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    });
+    // 顯示剩餘 hp
+    if (tg.hp < tg.maxHp) {
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(tg.hp, tg.x + tg.w / 2, tg.y + tg.h / 2);
+    }
+  }
+
+  function drawIndestructible(tg) {
+    // 深灰純反彈
+    const g = ctx.createLinearGradient(tg.x, tg.y, tg.x, tg.y + tg.h);
+    g.addColorStop(0, '#37474f');
+    g.addColorStop(1, '#1c2833');
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    roundRect(ctx, tg.x + 1, tg.y + 3, tg.w, tg.h, 4); ctx.fill();
+    ctx.fillStyle = g;
+    roundRect(ctx, tg.x, tg.y, tg.w, tg.h, 4); ctx.fill();
+    // 十字斜線
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(tg.x + 2, tg.y + 2); ctx.lineTo(tg.x + tg.w - 2, tg.y + tg.h - 2);
+    ctx.moveTo(tg.x + tg.w - 2, tg.y + 2); ctx.lineTo(tg.x + 2, tg.y + tg.h - 2);
+    ctx.stroke();
+  }
+
+  function drawGem(tg) {
+    const cx = tg.x + tg.w / 2, cy = tg.y + tg.h / 2;
+    const w = tg.w * 0.5, h = tg.h * 0.7;
+    // 菱形
+    ctx.save();
+    ctx.translate(cx, cy);
+    const g = ctx.createLinearGradient(0, -h/2, 0, h/2);
+    g.addColorStop(0, '#e1f5fe');
+    g.addColorStop(0.5, '#29b6f6');
+    g.addColorStop(1, '#0277bd');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(0, -h/2);
+    ctx.lineTo(w/2, 0);
+    ctx.lineTo(0, h/2);
+    ctx.lineTo(-w/2, 0);
+    ctx.closePath();
+    ctx.fill();
+    // 高光線
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-w/2, 0); ctx.lineTo(0, -h/2); ctx.lineTo(w/2, 0);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawMystery(tg) {
+    const cx = tg.x + tg.w / 2, cy = tg.y + tg.h / 2;
+    // 彩虹漸層磚
+    const hue = (Date.now() / 8 + tg.colorSeed) % 360;
+    const g = ctx.createLinearGradient(tg.x, tg.y, tg.x + tg.w, tg.y + tg.h);
+    g.addColorStop(0, `hsl(${hue}, 85%, 70%)`);
+    g.addColorStop(0.5, `hsl(${(hue + 120) % 360}, 85%, 60%)`);
+    g.addColorStop(1, `hsl(${(hue + 240) % 360}, 85%, 55%)`);
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    roundRect(ctx, tg.x + 1, tg.y + 3, tg.w, tg.h, 8); ctx.fill();
+    ctx.fillStyle = g;
+    roundRect(ctx, tg.x, tg.y, tg.w, tg.h, 8); ctx.fill();
+    // ? 符號
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${Math.floor(tg.h * 0.7)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('?', cx, cy);
+  }
+
+  function drawHiddenTarget(tg) {
+    // 隱藏磚未揭曉：只畫一個淡淡輪廓提示
+    ctx.fillStyle = 'rgba(120, 100, 90, 0.05)';
+    roundRect(ctx, tg.x, tg.y, tg.w, tg.h, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(120, 100, 90, 0.15)';
+    ctx.setLineDash([3, 4]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.rect(tg.x + 2, tg.y + 2, tg.w - 4, tg.h - 4);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function drawSpeedup(tg) {
+    const cx = tg.x + tg.w / 2, cy = tg.y + tg.h / 2;
+    const g = ctx.createLinearGradient(tg.x, tg.y, tg.x, tg.y + tg.h);
+    g.addColorStop(0, '#fff176');
+    g.addColorStop(1, '#fbc02d');
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    roundRect(ctx, tg.x + 1, tg.y + 3, tg.w, tg.h, 6); ctx.fill();
+    ctx.fillStyle = g;
+    roundRect(ctx, tg.x, tg.y, tg.w, tg.h, 6); ctx.fill();
+    // 閃電符號
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${Math.floor(tg.h * 0.75)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('⚡', cx, cy);
   }
 
   function drawWater(tg) {
@@ -1148,4 +1520,26 @@
   hud.classList.add('hidden');
   pauseBtn.classList.add('hidden');
   requestAnimationFrame(loop);
+
+  // ===== 對外 API（給 editor.js） =====
+  window.MFSB = {
+    startGameDev,
+    startTestPlay(lvObj) {
+      SFX.button();
+      gameMode = 'easy';
+      score = 0;
+      lives = 5;
+      speedMultiplier = 1;
+      hideAllOverlays();
+      hud.classList.remove('hidden');
+      pauseBtn.classList.remove('hidden');
+      loadLevel(-1, lvObj);
+      ensureAudio();
+    },
+    showTitle: backToTitle,
+    showOverlay,
+    getMaterials() { return MATERIALS; },
+    getMatEmoji() { return MAT_EMOJI; },
+    getLevels() { return LEVELS; },
+  };
 })();

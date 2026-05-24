@@ -94,7 +94,127 @@
 
         <div class="dev-actions">
           <button id="dev-start-btn" class="big-btn confirm">🚀 開始</button>
+          <button id="dev-open-editor-btn" class="big-btn editor-link">🎨 關卡設計器</button>
+          <button id="dev-open-mylevels-btn" class="big-btn mylevels-link">📂 我的關卡</button>
           <button id="dev-back-btn" class="ghost-btn">← 返回主畫面</button>
+        </div>
+      </section>
+
+      <!-- 關卡編輯器 -->
+      <section id="editor-screen" class="overlay hidden editor-overlay">
+        <header class="ed-header">
+          <button id="ed-back-btn" class="ghost-btn small">⬅ 返回</button>
+          <h2 class="ed-title">🎨 關卡設計器</h2>
+          <button id="ed-mylevels-btn" class="ghost-btn small">📂 我的關卡</button>
+        </header>
+
+        <details class="ed-props" open>
+          <summary>關卡屬性</summary>
+          <div class="ed-props-body">
+            <label class="ed-field">
+              <span>名稱</span>
+              <input id="ed-name" type="text" maxlength="20" placeholder="我的關卡">
+            </label>
+            <label class="ed-field">
+              <span>球速 <output id="ed-speed-val">400</output></span>
+              <input id="ed-speed" type="range" min="200" max="800" step="20" value="400">
+            </label>
+            <label class="ed-field">
+              <span>排數 <output id="ed-rows-val">7</output></span>
+              <input id="ed-rows" type="range" min="3" max="15" step="1" value="7">
+            </label>
+            <label class="ed-field">
+              <span>背景</span>
+              <select id="ed-theme">
+                <option value="warm">🌅 暖橘</option>
+                <option value="ocean">🌊 海洋</option>
+                <option value="forest">🌲 森林</option>
+                <option value="night">🌃 夜空</option>
+                <option value="candy">🍭 糖果</option>
+              </select>
+            </label>
+          </div>
+        </details>
+
+        <div class="ed-toolbar">
+          <div class="ed-palette" id="ed-palette">
+            <button class="ed-tile active" data-mat="B" title="磚塊">🟥</button>
+            <button class="ed-tile" data-mat="W" title="水球">💧</button>
+            <button class="ed-tile" data-mat="F" title="西瓜">🍉</button>
+            <button class="ed-tile" data-mat="S" title="草莓">🍓</button>
+            <button class="ed-tile" data-mat="O" title="橘子">🍊</button>
+            <button class="ed-tile" data-mat="H" title="鋼磚 (3 hp)">🛡️</button>
+            <button class="ed-tile" data-mat="X" title="不可破">⛔</button>
+            <button class="ed-tile" data-mat="G" title="寶石 +100">💎</button>
+            <button class="ed-tile" data-mat="?" title="神秘箱">🎁</button>
+            <button class="ed-tile" data-mat="N" title="隱藏磚">🌑</button>
+            <button class="ed-tile" data-mat="Z" title="加速磚">⚡</button>
+            <button class="ed-tile" data-mat="." title="橡皮擦">⬜</button>
+          </div>
+          <div class="ed-tools">
+            <button id="ed-mirror-btn" class="ed-tool" title="左右鏡像">🪞</button>
+            <button id="ed-undo-btn" class="ed-tool" title="撤銷 Ctrl+Z">↩</button>
+            <button id="ed-redo-btn" class="ed-tool" title="重做 Ctrl+Y">↪</button>
+            <button id="ed-clear-btn" class="ed-tool" title="全部清空">🗑</button>
+            <button id="ed-template-btn" class="ed-tool" title="從樣板">📋</button>
+            <button id="ed-fill-btn" class="ed-tool" title="整排填滿">🪣</button>
+          </div>
+        </div>
+
+        <div class="ed-canvas-wrap">
+          <canvas id="ed-canvas" width="540" height="700"></canvas>
+        </div>
+
+        <div class="ed-actions">
+          <button id="ed-save-btn" class="big-btn confirm small">💾 存檔</button>
+          <button id="ed-test-btn" class="big-btn confirm small">▶ 試玩</button>
+          <button id="ed-export-btn" class="ghost-btn small">📤 匯出</button>
+        </div>
+      </section>
+
+      <!-- 我的關卡列表 -->
+      <section id="mylevels-screen" class="overlay hidden mylevels-overlay">
+        <header class="ed-header">
+          <button id="ml-back-btn" class="ghost-btn small">⬅ 返回</button>
+          <h2 class="ed-title">📂 我的關卡 <span id="ml-count" class="ml-count">(0)</span></h2>
+          <button id="ml-editor-btn" class="ghost-btn small">🎨 編輯器</button>
+        </header>
+
+        <p class="ml-hint">啟用中的關卡會在正式 10 關之後依序播放</p>
+
+        <div id="ml-list" class="ml-list"></div>
+
+        <div class="ml-empty hidden" id="ml-empty">
+          <p>📭 還沒有自製關卡</p>
+          <p>點下面的「新增空白」開始設計！</p>
+        </div>
+
+        <div class="ed-actions">
+          <button id="ml-new-btn" class="big-btn confirm small">➕ 新增空白</button>
+          <button id="ml-template-btn" class="big-btn editor-link small">📋 從樣板建立</button>
+          <button id="ml-import-btn" class="ghost-btn small">📥 匯入 JSON</button>
+          <button id="ml-export-all-btn" class="ghost-btn small">📤 匯出全部</button>
+        </div>
+      </section>
+
+      <!-- 樣板選單 -->
+      <section id="template-screen" class="overlay hidden template-overlay">
+        <header class="ed-header">
+          <button id="tpl-back-btn" class="ghost-btn small">⬅ 返回</button>
+          <h2 class="ed-title">📋 選擇樣板</h2>
+          <span></span>
+        </header>
+        <div class="tpl-grid" id="tpl-grid"></div>
+      </section>
+
+      <!-- 文字輸入彈窗（匯入/匯出 JSON） -->
+      <section id="text-dialog" class="overlay hidden text-dialog-overlay">
+        <h2 class="ed-title" id="td-title">標題</h2>
+        <textarea id="td-textarea" spellcheck="false"></textarea>
+        <div class="td-actions">
+          <button id="td-copy-btn" class="big-btn confirm small">📋 複製</button>
+          <button id="td-confirm-btn" class="big-btn confirm small">✓ 確認</button>
+          <button id="td-cancel-btn" class="ghost-btn small">取消</button>
         </div>
       </section>
 
@@ -137,6 +257,7 @@
   </div>
 
   <script src="./js/game.js"></script>
+  <script src="./js/editor.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
