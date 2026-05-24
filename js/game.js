@@ -1293,7 +1293,11 @@
   // ===== UI 控制 =====
   function updateHUD() {
     const devTag = (speedMultiplier !== 1) ? ` · ⚙️${speedMultiplier}×` : '';
-    levelBadge.textContent = `第 ${levelIndex + 1} 關${devTag}`;
+    if (levelIndex === -1) {
+      levelBadge.textContent = `🎨 試玩中`;
+    } else {
+      levelBadge.textContent = `第 ${levelIndex + 1} 關${devTag}`;
+    }
     scoreBadge.textContent = `分數 ${score}`;
     if (gameMode === 'challenge') {
       livesBadge.classList.remove('hidden');
