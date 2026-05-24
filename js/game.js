@@ -108,6 +108,71 @@
         '.....BB.....',
       ],
     },
+    {
+      name: '第 6 關 · 彩虹拱橋',
+      speed: 500,
+      grid: [
+        '....BBBB....',
+        '..BBBBBBBB..',
+        '.BBWWWWWWBB.',
+        'BBWBBBBBBWBB',
+        'BBBBOOOOBBBB',
+        'BBBBBBBBBBBB',
+      ],
+    },
+    {
+      name: '第 7 關 · 雙星閃耀',
+      speed: 540,
+      grid: [
+        '.B........B.',
+        'BSB......BSB',
+        'BFFB....BFFB',
+        '.BFB....BFB.',
+        '..B..WW..B..',
+        '.....WW.....',
+      ],
+    },
+    {
+      name: '第 8 關 · 鎖鏈圍城',
+      speed: 580,
+      grid: [
+        'FFFFFFFFFFFF',
+        'F..........F',
+        'F.BWBWBWBW.F',
+        'F.WBWBWBWB.F',
+        'F.BWBWBWBW.F',
+        'F..........F',
+        'FFFFFFFFFFFF',
+      ],
+    },
+    {
+      name: '第 9 關 · 漏斗陷阱',
+      speed: 620,
+      grid: [
+        'BBBBBBBBBBBB',
+        '.WWWWWWWWWW.',
+        '..OOOOOOOO..',
+        '...SSSSSS...',
+        '....FFFF....',
+        '.....BB.....',
+        '......B.....',
+      ],
+    },
+    {
+      name: '第 10 關 · 終極大魔王',
+      speed: 680,
+      grid: [
+        '.B.B.BB.B.B.',
+        'BBBBBBBBBBBB',
+        'BWWBBBBBBWWB',
+        'BWWB.OO.BWWB',
+        'BBBBOOOOBBBB',
+        'BBBBBBBBBBBB',
+        '.FFFFSSFFFF.',
+        '..FFSFFSFF..',
+        '...FFFFFF...',
+      ],
+    },
   ];
 
   // ===== 渲染配置 =====
