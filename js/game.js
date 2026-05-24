@@ -1305,7 +1305,11 @@
 
   function hideAllOverlays() {
     [titleScreen, clearScreen, victoryScreen, gameOverScreen, pauseScreen,
-     document.getElementById('dev-screen')]
+     document.getElementById('dev-screen'),
+     document.getElementById('editor-screen'),
+     document.getElementById('mylevels-screen'),
+     document.getElementById('template-screen'),
+     document.getElementById('text-dialog')]
       .forEach(o => o && o.classList.add('hidden'));
   }
   function showOverlay(el) {
