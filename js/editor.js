@@ -850,6 +850,14 @@
   }
   // 主畫面進入開發者模式時 refresh
   document.getElementById('dev-mode-btn').addEventListener('click', refreshDevLevels);
+  // 從任何路徑進 dev-screen 都自動 refresh（用 MutationObserver 監聽 class 變化）
+  const devScreen = document.getElementById('dev-screen');
+  if (devScreen && typeof MutationObserver !== 'undefined') {
+    const obs = new MutationObserver(() => {
+      if (!devScreen.classList.contains('hidden')) refreshDevLevels();
+    });
+    obs.observe(devScreen, { attributes: true, attributeFilter: ['class'] });
+  }
   // 第一次載入也 refresh 一下（避免 race）
   refreshDevLevels();
 
