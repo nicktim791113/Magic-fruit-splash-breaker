@@ -298,6 +298,114 @@ html, body {
   overflow-y: auto;
 }
 
+.ed-header-right {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* 編輯器主排版：手機堆疊、桌面左右並排 */
+.ed-grid {
+  width: min(1100px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ed-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+.ed-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #37474f;
+  padding: 4px 0 2px;
+  border-top: 1px dashed rgba(120,120,120,0.25);
+  margin-top: 4px;
+}
+.ed-section-title small { font-size: 11px; color: #78909c; font-weight: 500; margin-left: 4px; }
+.ed-field small { color: #78909c; font-weight: 500; font-size: 11px; }
+
+@media (min-width: 900px) {
+  .ed-grid {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    grid-template-rows: 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  .ed-side {
+    max-height: calc(100vh - 130px);
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .ed-canvas-wrap {
+    max-height: calc(100vh - 130px);
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+  #ed-canvas {
+    width: 100%;
+    max-width: 700px;
+    margin: 0 auto;
+  }
+}
+
+/* 說明抽屜 */
+.ed-help-drawer {
+  position: fixed;
+  top: 0; right: 0;
+  width: min(440px, 100%);
+  height: 100vh;
+  background: #fff;
+  border-left: 3px solid #cfd8dc;
+  box-shadow: -6px 0 18px rgba(0,0,0,0.18);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(0);
+  transition: transform 0.25s ease-out;
+}
+.ed-help-drawer.hidden {
+  transform: translateX(100%);
+  display: flex !important;
+  pointer-events: none;
+}
+.ed-help-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 2px solid #eceff1;
+  background: linear-gradient(180deg, #fff8e1, #ffe0b2);
+}
+.ed-help-header h3 { margin: 0; font-size: 18px; color: #37474f; }
+.ed-help-body {
+  padding: 14px 18px 24px;
+  overflow-y: auto;
+  flex: 1;
+  font-size: 14px;
+  color: #37474f;
+}
+.ed-help-body h4 {
+  margin: 14px 0 6px;
+  font-size: 15px;
+  color: #1976d2;
+  border-bottom: 1px dashed #cfd8dc;
+  padding-bottom: 4px;
+}
+.ed-help-body ul {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.6;
+}
+.ed-help-body ul li { margin: 4px 0; }
+.ed-help-body b { color: #d84315; }
+
 .ed-header {
   display: flex;
   align-items: center;
@@ -371,25 +479,30 @@ html, body {
 
 .ed-palette {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 4px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
   background: rgba(255,255,255,0.85);
   border: 2px solid #cfd8dc;
   border-radius: 12px;
   padding: 6px;
 }
-@media (max-width: 480px) {
+@media (min-width: 500px) and (max-width: 899px) {
   .ed-palette { grid-template-columns: repeat(6, 1fr); }
 }
 
 .ed-tile {
-  font-size: 22px;
-  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px;
   background: #fff;
   border: 2px solid #cfd8dc;
   border-radius: 8px;
   cursor: pointer;
   transition: transform 0.06s;
+  font-family: inherit;
+  line-height: 1.1;
 }
 .ed-tile:active { transform: scale(0.9); }
 .ed-tile.active {
@@ -398,27 +511,38 @@ html, body {
   box-shadow: 0 3px 0 rgba(0,0,0,0.15);
   transform: translateY(-2px);
 }
+.ed-tile .ed-emoji { font-size: 20px; line-height: 1; }
+.ed-tile .ed-tile-name { font-size: 11px; color: #455a64; font-weight: 600; }
+.ed-tile.active .ed-tile-name { color: #fff; }
 
 .ed-tools {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
-  justify-content: center;
 }
 .ed-tool {
-  font-size: 20px;
-  padding: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px;
   background: #fff;
   border: 2px solid #cfd8dc;
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
+  font-family: inherit;
+  line-height: 1.1;
 }
 .ed-tool:active { transform: scale(0.95); }
 .ed-tool.active {
   background: linear-gradient(180deg, #66bb6a, #2e7d32);
   color: #fff;
   border-color: #1b5e20;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.15);
 }
+.ed-tool .ed-emoji { font-size: 18px; line-height: 1; }
+.ed-tool .ed-tile-name { font-size: 11px; color: #455a64; font-weight: 600; }
+.ed-tool.active .ed-tile-name { color: #fff; }
 
 .ed-canvas-wrap {
   width: min(640px, 100%);

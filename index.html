@@ -105,72 +105,168 @@
         <header class="ed-header">
           <button id="ed-back-btn" class="ghost-btn small">⬅ 返回</button>
           <h2 class="ed-title">🎨 關卡設計器</h2>
-          <button id="ed-mylevels-btn" class="ghost-btn small">📂 我的關卡</button>
+          <div class="ed-header-right">
+            <button id="ed-help-btn" class="ghost-btn small" title="說明">❓</button>
+            <button id="ed-mylevels-btn" class="ghost-btn small">📂 我的</button>
+          </div>
         </header>
 
-        <details class="ed-props" open>
-          <summary>關卡屬性</summary>
-          <div class="ed-props-body">
-            <label class="ed-field">
-              <span>名稱</span>
-              <input id="ed-name" type="text" maxlength="20" placeholder="我的關卡">
-            </label>
-            <label class="ed-field">
-              <span>球速 <output id="ed-speed-val">400</output></span>
-              <input id="ed-speed" type="range" min="200" max="800" step="20" value="400">
-            </label>
-            <label class="ed-field">
-              <span>排數 <output id="ed-rows-val">7</output></span>
-              <input id="ed-rows" type="range" min="3" max="15" step="1" value="7">
-            </label>
-            <label class="ed-field">
-              <span>背景</span>
-              <select id="ed-theme">
-                <option value="warm">🌅 暖橘</option>
-                <option value="ocean">🌊 海洋</option>
-                <option value="forest">🌲 森林</option>
-                <option value="night">🌃 夜空</option>
-                <option value="candy">🍭 糖果</option>
-              </select>
-            </label>
-          </div>
-        </details>
+        <div class="ed-grid">
+          <!-- 左欄：屬性 + 工具 + 動作（手機時整欄堆疊） -->
+          <aside class="ed-side">
+            <details class="ed-props" open>
+              <summary>📐 關卡屬性</summary>
+              <div class="ed-props-body">
+                <label class="ed-field">
+                  <span>名稱 <small>(關卡顯示名)</small></span>
+                  <input id="ed-name" type="text" maxlength="20" placeholder="我的關卡">
+                </label>
+                <label class="ed-field">
+                  <span>球速 <output id="ed-speed-val">400</output> <small>(數值越大越快)</small></span>
+                  <input id="ed-speed" type="range" min="200" max="800" step="20" value="400">
+                </label>
+                <label class="ed-field">
+                  <span>排數 <output id="ed-rows-val">7</output> <small>(3-15 排)</small></span>
+                  <input id="ed-rows" type="range" min="3" max="15" step="1" value="7">
+                </label>
+                <label class="ed-field">
+                  <span>背景 <small>(視覺主題)</small></span>
+                  <select id="ed-theme">
+                    <option value="warm">🌅 暖橘</option>
+                    <option value="ocean">🌊 海洋</option>
+                    <option value="forest">🌲 森林</option>
+                    <option value="night">🌃 夜空</option>
+                    <option value="candy">🍭 糖果</option>
+                  </select>
+                </label>
+              </div>
+            </details>
 
-        <div class="ed-toolbar">
-          <div class="ed-palette" id="ed-palette">
-            <button class="ed-tile active" data-mat="B" title="磚塊">🟥</button>
-            <button class="ed-tile" data-mat="W" title="水球">💧</button>
-            <button class="ed-tile" data-mat="F" title="西瓜">🍉</button>
-            <button class="ed-tile" data-mat="S" title="草莓">🍓</button>
-            <button class="ed-tile" data-mat="O" title="橘子">🍊</button>
-            <button class="ed-tile" data-mat="H" title="鋼磚 (3 hp)">🛡️</button>
-            <button class="ed-tile" data-mat="X" title="不可破">⛔</button>
-            <button class="ed-tile" data-mat="G" title="寶石 +100">💎</button>
-            <button class="ed-tile" data-mat="?" title="神秘箱">🎁</button>
-            <button class="ed-tile" data-mat="N" title="隱藏磚">🌑</button>
-            <button class="ed-tile" data-mat="Z" title="加速磚">⚡</button>
-            <button class="ed-tile" data-mat="." title="橡皮擦">⬜</button>
-          </div>
-          <div class="ed-tools">
-            <button id="ed-mirror-btn" class="ed-tool" title="左右鏡像">🪞</button>
-            <button id="ed-undo-btn" class="ed-tool" title="撤銷 Ctrl+Z">↩</button>
-            <button id="ed-redo-btn" class="ed-tool" title="重做 Ctrl+Y">↪</button>
-            <button id="ed-clear-btn" class="ed-tool" title="全部清空">🗑</button>
-            <button id="ed-template-btn" class="ed-tool" title="從樣板">📋</button>
-            <button id="ed-fill-btn" class="ed-tool" title="整排填滿">🪣</button>
-          </div>
-        </div>
+            <div class="ed-section-title">🎨 素材調色盤 <small>(點選後在格子上塗)</small></div>
+            <div class="ed-palette" id="ed-palette">
+              <button class="ed-tile active" data-mat="B"><span class="ed-emoji">🟥</span><span class="ed-tile-name">磚塊</span></button>
+              <button class="ed-tile"        data-mat="W"><span class="ed-emoji">💧</span><span class="ed-tile-name">水球</span></button>
+              <button class="ed-tile"        data-mat="F"><span class="ed-emoji">🍉</span><span class="ed-tile-name">西瓜</span></button>
+              <button class="ed-tile"        data-mat="S"><span class="ed-emoji">🍓</span><span class="ed-tile-name">草莓</span></button>
+              <button class="ed-tile"        data-mat="O"><span class="ed-emoji">🍊</span><span class="ed-tile-name">橘子</span></button>
+              <button class="ed-tile"        data-mat="H"><span class="ed-emoji">🛡️</span><span class="ed-tile-name">鋼磚</span></button>
+              <button class="ed-tile"        data-mat="X"><span class="ed-emoji">⛔</span><span class="ed-tile-name">不可破</span></button>
+              <button class="ed-tile"        data-mat="G"><span class="ed-emoji">💎</span><span class="ed-tile-name">寶石</span></button>
+              <button class="ed-tile"        data-mat="?"><span class="ed-emoji">🎁</span><span class="ed-tile-name">神秘箱</span></button>
+              <button class="ed-tile"        data-mat="N"><span class="ed-emoji">🌑</span><span class="ed-tile-name">隱藏磚</span></button>
+              <button class="ed-tile"        data-mat="Z"><span class="ed-emoji">⚡</span><span class="ed-tile-name">加速磚</span></button>
+              <button class="ed-tile"        data-mat="."><span class="ed-emoji">⬜</span><span class="ed-tile-name">橡皮擦</span></button>
+            </div>
 
-        <div class="ed-canvas-wrap">
-          <canvas id="ed-canvas" width="540" height="700"></canvas>
-        </div>
+            <div class="ed-section-title">🛠️ 工具</div>
+            <div class="ed-tools">
+              <button id="ed-paint-btn" class="ed-tool active"><span class="ed-emoji">✏️</span><span class="ed-tile-name">塗繪</span></button>
+              <button id="ed-rect-btn" class="ed-tool"><span class="ed-emoji">▭</span><span class="ed-tile-name">框選</span></button>
+              <button id="ed-mirror-btn" class="ed-tool"><span class="ed-emoji">🪞</span><span class="ed-tile-name">鏡像</span></button>
+              <button id="ed-undo-btn" class="ed-tool"><span class="ed-emoji">↩</span><span class="ed-tile-name">撤銷</span></button>
+              <button id="ed-redo-btn" class="ed-tool"><span class="ed-emoji">↪</span><span class="ed-tile-name">重做</span></button>
+              <button id="ed-clear-btn" class="ed-tool"><span class="ed-emoji">🗑</span><span class="ed-tile-name">全清</span></button>
+              <button id="ed-template-btn" class="ed-tool"><span class="ed-emoji">📋</span><span class="ed-tile-name">樣板</span></button>
+              <button id="ed-fill-btn" class="ed-tool"><span class="ed-emoji">🪣</span><span class="ed-tile-name">整片填</span></button>
+            </div>
 
-        <div class="ed-actions">
-          <button id="ed-save-btn" class="big-btn confirm small">💾 存檔</button>
-          <button id="ed-test-btn" class="big-btn confirm small">▶ 試玩</button>
-          <button id="ed-export-btn" class="ghost-btn small">📤 匯出</button>
+            <div class="ed-section-title">💾 動作</div>
+            <div class="ed-actions">
+              <button id="ed-save-btn" class="big-btn confirm small">💾 存檔</button>
+              <button id="ed-test-btn" class="big-btn confirm small">▶ 試玩</button>
+              <button id="ed-export-btn" class="ghost-btn small">📤 匯出</button>
+              <button id="ed-share-btn" class="ghost-btn small">🔗 分享</button>
+            </div>
+          </aside>
+
+          <!-- 右欄：畫布 -->
+          <div class="ed-canvas-wrap">
+            <canvas id="ed-canvas" width="540" height="700"></canvas>
+          </div>
         </div>
       </section>
+
+      <!-- 說明抽屜 -->
+      <aside id="ed-help-drawer" class="ed-help-drawer hidden">
+        <header class="ed-help-header">
+          <h3>📖 設計器說明</h3>
+          <button id="ed-help-close" class="ghost-btn small">✕</button>
+        </header>
+        <div class="ed-help-body">
+          <h4>🎨 基本素材</h4>
+          <ul>
+            <li><b>🟥 磚塊</b>：最常見的目標，打 <b>1 下</b>就破，分數 <b>+10</b>。每塊顏色隨機。</li>
+            <li><b>💧 水球</b>：打 1 下破，破時噴出水花動畫，<b>分數 +15</b>。</li>
+            <li><b>🍉 西瓜</b>：要打 <b>2 下</b>。第 1 下出現裂痕，第 2 下噴汁，分數 <b>+25</b>。</li>
+            <li><b>🍓 草莓</b>：跟西瓜一樣 2 下破，紅粉色，分數 +25。</li>
+            <li><b>🍊 橘子</b>：跟西瓜一樣 2 下破，橘色，分數 +25。</li>
+          </ul>
+          <h4>🆕 進階素材</h4>
+          <ul>
+            <li><b>🛡️ 鋼磚</b>：要 <b>3 下</b>才破，灰色金屬，分數 <b>+40</b>。受傷會顯示剩餘 hp。</li>
+            <li><b>⛔ 不可破</b>：<b>永遠不破</b>，純反彈障礙。可做關卡中間的隔牆。<b>過關條件不算它</b>。</li>
+            <li><b>💎 寶石</b>：1 下破，<b>分數 +100</b>（最高分！）</li>
+            <li><b>🎁 神秘箱</b>：1 下破，破時 <b>隨機掉落道具</b>（往下飄、要用擋板接到才生效）。</li>
+            <li><b>🌑 隱藏磚</b>：開局看不見（虛線輪廓提示）。<b>第一次球碰到只揭曉、不算破</b>，要再打一次才破，分數 <b>+30</b>。</li>
+            <li><b>⚡ 加速磚</b>：1 下破，破時 <b>所有球加速 10%</b>。挑戰用。</li>
+            <li><b>⬜ 橡皮擦</b>：把該格子變成「空」（沒目標）。</li>
+          </ul>
+          <h4>🎁 神秘箱掉落的道具</h4>
+          <ul>
+            <li><b>↔️ 擋板變寬</b>：擋板寬 1.5×，持續 10 秒。</li>
+            <li><b>🐢 慢速球</b>：所有球速度 ×0.7，持續 8 秒。容錯用。</li>
+            <li><b>⚪ 多球</b>：立刻多出 2 顆球，全部都掉光才扣命。</li>
+            <li><b>✖2 雙倍分</b>：10 秒內所有得分 ×2。</li>
+            <li><b>💎 +50</b>：直接加 50 分。</li>
+          </ul>
+          <h4>🛠️ 工具</h4>
+          <ul>
+            <li><b>✏️ 塗繪</b>：點 / 拖過格子，塗成當前選的素材。</li>
+            <li><b>▭ 框選</b>：拖出矩形，<b>釋放後整片填滿</b>當前素材。塗大區塊神器。</li>
+            <li><b>🪞 鏡像</b>：左右對稱模式。塗左邊自動填右邊。<b>做愛心/笑臉/BOSS 臉必備</b>。</li>
+            <li><b>↩ 撤銷 / ↪ 重做</b>：`Ctrl+Z` / `Ctrl+Y`。</li>
+            <li><b>🗑 全清</b>：整張關卡清成空白。</li>
+            <li><b>📋 樣板</b>：9 個預設關卡，當起點省時間。</li>
+            <li><b>🪣 整片填</b>：所有非空格子都改成當前素材（不影響空格）。</li>
+          </ul>
+          <h4>📐 屬性</h4>
+          <ul>
+            <li><b>名稱</b>：列表與遊戲中顯示的關卡名。</li>
+            <li><b>球速</b>：200–800，越大越快。對應正式關卡：300=暖身、680=最終 BOSS。</li>
+            <li><b>排數</b>：3–15 排。欄數固定 12。</li>
+            <li><b>背景</b>：5 種主題（暖橘 / 海洋 / 森林 / 夜空 / 糖果）。</li>
+          </ul>
+          <h4>💾 動作</h4>
+          <ul>
+            <li><b>💾 存檔</b>：寫入瀏覽器本機（localStorage）。重新整理仍在。</li>
+            <li><b>▶ 試玩</b>：直接玩這張，過關回編輯器。</li>
+            <li><b>📤 匯出</b>：複製整張 JSON。</li>
+            <li><b>🔗 分享</b>：產生短 URL，給朋友打開就能匯入這張關卡。</li>
+          </ul>
+          <h4>📂 我的關卡</h4>
+          <ul>
+            <li>所有自製關卡都列在這。<b>啟用</b>的會接在正式 10 關後依序播放。</li>
+            <li>可以 <b>拖曳 ☰</b> 調整關卡順序。</li>
+            <li>支援 ✏️ 編輯、▶ 試玩、📋 複製、🗑 刪除。</li>
+            <li>📥 匯入 JSON、📤 匯出全部 JSON。</li>
+          </ul>
+          <h4>⌨️ 鍵盤捷徑</h4>
+          <ul>
+            <li><b>Ctrl+Z / Cmd+Z</b>：撤銷</li>
+            <li><b>Ctrl+Y / Ctrl+Shift+Z</b>：重做</li>
+            <li><b>M</b>：切換鏡像模式</li>
+            <li><b>R</b>：切換框選工具</li>
+          </ul>
+          <h4>💡 設計小撇步</h4>
+          <ul>
+            <li>對稱圖案先開 <b>🪞 鏡像</b>，工作量直接半半。</li>
+            <li>不可破 ⛔ 不算過關目標，可以放在中間當「永久障礙」。</li>
+            <li>神秘箱 🎁 多放幾個會有源源不絕的道具，搭配多球 ⚪ 很爽。</li>
+            <li>鋼磚 🛡️ + 不可破 ⛔ 邊框做迷宮關卡，搭低球速也不死。</li>
+            <li>🔗 分享網址可以發給朋友，他打開就能拿到這張關卡。</li>
+          </ul>
+        </div>
+      </aside>
 
       <!-- 我的關卡列表 -->
       <section id="mylevels-screen" class="overlay hidden mylevels-overlay">

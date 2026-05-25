@@ -1393,13 +1393,14 @@
   let devLevel = 0, devSpeed = 1, devMode = 'easy';
 
   function makeSegHandler(group, onPick) {
-    group.querySelectorAll('.seg-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        SFX.button();
-        group.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        onPick(btn);
-      });
+    // 使用 event delegation，動態 append 的按鈕也能用
+    group.addEventListener('click', (e) => {
+      const btn = e.target.closest('.seg-btn');
+      if (!btn || !group.contains(btn)) return;
+      SFX.button();
+      group.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      onPick(btn);
     });
   }
   makeSegHandler(devLevelGroup, btn => { devLevel = parseInt(btn.dataset.level, 10) || 0; });

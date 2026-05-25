@@ -17,6 +17,9 @@
     theme: 'warm',
     selectedMat: 'B',
     mirrorMode: false,
+    tool: 'paint',            // 'paint' | 'rect'
+    rectStart: null,          // { r, c } 框選起點
+    rectEnd: null,
     history: [],
     redo: [],
     editingId: null,
@@ -98,12 +101,18 @@
   const rowsVal = document.getElementById('ed-rows-val');
   const themeInput = document.getElementById('ed-theme');
   const palette = document.getElementById('ed-palette');
+  const paintBtn = document.getElementById('ed-paint-btn');
+  const rectBtn = document.getElementById('ed-rect-btn');
   const mirrorBtn = document.getElementById('ed-mirror-btn');
   const undoBtn = document.getElementById('ed-undo-btn');
   const redoBtn = document.getElementById('ed-redo-btn');
   const clearBtn = document.getElementById('ed-clear-btn');
   const tplBtn = document.getElementById('ed-template-btn');
   const fillBtn = document.getElementById('ed-fill-btn');
+  const helpBtn = document.getElementById('ed-help-btn');
+  const helpDrawer = document.getElementById('ed-help-drawer');
+  const helpCloseBtn = document.getElementById('ed-help-close');
+  const shareBtn = document.getElementById('ed-share-btn');
 
   // ===== 工具：空 grid =====
   function makeEmptyGrid(rows) {
@@ -327,6 +336,25 @@
         drawCellGlyph(ch, x, y, cellW, cellH);
       }
     }
+
+    // 框選預覽
+    if (ed.tool === 'rect' && ed.rectStart && ed.rectEnd) {
+      const r0 = Math.min(ed.rectStart.r, ed.rectEnd.r);
+      const r1 = Math.max(ed.rectStart.r, ed.rectEnd.r);
+      const c0 = Math.min(ed.rectStart.c, ed.rectEnd.c);
+      const c1 = Math.max(ed.rectStart.c, ed.rectEnd.c);
+      const x = 6 + c0 * cellW;
+      const y = 6 + r0 * (cellH + 2);
+      const w = (c1 - c0 + 1) * cellW;
+      const h = (r1 - r0 + 1) * (cellH + 2) - 2;
+      ctx.fillStyle = 'rgba(255, 152, 0, 0.18)';
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = '#ff6f00';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(x, y, w, h);
+      ctx.setLineDash([]);
+    }
   }
 
   const CELL_COLORS = {
@@ -376,9 +404,15 @@
   let lastRC = { r: -1, c: -1 };
   function onPointerDown(e) {
     e.preventDefault();
-    pushHistory();
     ed.drawingActive = true;
     const { r, c } = eventToRC(e);
+    if (ed.tool === 'rect') {
+      ed.rectStart = { r: clampRow(r), c: clampCol(c) };
+      ed.rectEnd = { ...ed.rectStart };
+      render();
+      return;
+    }
+    pushHistory();
     paintAt(r, c);
     lastRC = { r, c };
   }
@@ -386,11 +420,43 @@
     if (!ed.drawingActive) return;
     e.preventDefault();
     const { r, c } = eventToRC(e);
+    if (ed.tool === 'rect') {
+      if (!ed.rectStart) return;
+      ed.rectEnd = { r: clampRow(r), c: clampCol(c) };
+      render();
+      return;
+    }
     if (r === lastRC.r && c === lastRC.c) return;
     paintAt(r, c);
     lastRC = { r, c };
   }
-  function onPointerUp() { ed.drawingActive = false; lastRC = { r: -1, c: -1 }; }
+  function onPointerUp() {
+    if (ed.tool === 'rect' && ed.rectStart && ed.rectEnd) {
+      // 落筆：填滿矩形範圍
+      const r0 = Math.min(ed.rectStart.r, ed.rectEnd.r);
+      const r1 = Math.max(ed.rectStart.r, ed.rectEnd.r);
+      const c0 = Math.min(ed.rectStart.c, ed.rectEnd.c);
+      const c1 = Math.max(ed.rectStart.c, ed.rectEnd.c);
+      pushHistory();
+      for (let r = r0; r <= r1; r++) {
+        for (let c = c0; c <= c1; c++) {
+          setCell(r, c, ed.selectedMat);
+          if (ed.mirrorMode) {
+            const mc = COLS - 1 - c;
+            if (mc !== c) setCell(r, mc, ed.selectedMat);
+          }
+        }
+      }
+      ed.rectStart = null;
+      ed.rectEnd = null;
+      render();
+    }
+    ed.drawingActive = false;
+    lastRC = { r: -1, c: -1 };
+  }
+
+  function clampRow(r) { return Math.max(0, Math.min(ed.grid.length - 1, r)); }
+  function clampCol(c) { return Math.max(0, Math.min(COLS - 1, c)); }
 
   canvas.addEventListener('mousedown', onPointerDown);
   window.addEventListener('mousemove', onPointerMove);
@@ -408,6 +474,16 @@
       ed.selectedMat = btn.dataset.mat;
     });
   });
+
+  function setTool(t) {
+    ed.tool = t;
+    paintBtn.classList.toggle('active', t === 'paint');
+    rectBtn.classList.toggle('active', t === 'rect');
+    ed.rectStart = null; ed.rectEnd = null;
+    render();
+  }
+  paintBtn.addEventListener('click', () => setTool('paint'));
+  rectBtn.addEventListener('click', () => setTool('rect'));
 
   mirrorBtn.addEventListener('click', () => {
     ed.mirrorMode = !ed.mirrorMode;
@@ -454,10 +530,77 @@
   document.getElementById('ed-save-btn').addEventListener('click', saveCurrent);
   document.getElementById('ed-test-btn').addEventListener('click', testPlayCurrent);
   document.getElementById('ed-export-btn').addEventListener('click', exportCurrent);
+  shareBtn.addEventListener('click', shareCurrent);
   document.getElementById('ed-back-btn').addEventListener('click', () => {
     if (window.MFSB) window.MFSB.showOverlay(document.getElementById('dev-screen'));
   });
   document.getElementById('ed-mylevels-btn').addEventListener('click', () => openMyLevels());
+
+  // ===== 說明抽屜 =====
+  helpBtn.addEventListener('click', () => helpDrawer.classList.remove('hidden'));
+  helpCloseBtn.addEventListener('click', () => helpDrawer.classList.add('hidden'));
+
+  // ===== 分享 URL =====
+  function encodeLevel(lv) {
+    // 精簡 payload：去掉時間戳，只留必要欄位
+    const slim = { v: 1, n: lv.name, s: lv.speed, t: lv.theme, g: lv.grid };
+    const json = JSON.stringify(slim);
+    // UTF-8 安全 base64
+    const utf8 = unescape(encodeURIComponent(json));
+    const b64 = btoa(utf8).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    return b64;
+  }
+  function decodeLevel(b64) {
+    try {
+      const norm = b64.replace(/-/g, '+').replace(/_/g, '/');
+      const pad = norm + '='.repeat((4 - norm.length % 4) % 4);
+      const utf8 = atob(pad);
+      const json = decodeURIComponent(escape(utf8));
+      const obj = JSON.parse(json);
+      if (!obj.g || !Array.isArray(obj.g)) return null;
+      return {
+        id: newId(),
+        name: obj.n || '分享關卡',
+        speed: obj.s || 400,
+        theme: obj.t || 'warm',
+        grid: obj.g.slice(),
+        enabled: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+    } catch (e) { return null; }
+  }
+  function shareCurrent() {
+    const lv = currentLevelObject();
+    if (lv.grid.every(row => /^\.+$/.test(row))) {
+      alert('還沒有任何素材，先在格子上塗一些再分享');
+      return;
+    }
+    const b64 = encodeLevel(lv);
+    const url = location.origin + location.pathname + '#lv=' + b64;
+    openTextDialog(
+      '🔗 分享連結 (按複製)',
+      url + '\n\n──────────\n別人打開這個連結，會直接匯入「' + lv.name + '」到他的編輯器。\n\n📏 連結長度：' + url.length + ' 字',
+      null
+    );
+  }
+  // 啟動時檢查 URL hash 自動匯入
+  function checkUrlForShare() {
+    const h = location.hash;
+    if (!h.startsWith('#lv=')) return;
+    const b64 = h.slice(4);
+    const lv = decodeLevel(b64);
+    if (!lv) return;
+    if (confirm('從分享連結匯入「' + lv.name + '」？\n（按確定後會打開編輯器）')) {
+      const data = loadAll();
+      data.levels.push(lv);
+      saveAll(data);
+      openEditor(lv);
+    }
+    // 清掉 hash 避免重複觸發
+    history.replaceState({}, '', location.pathname);
+  }
+  window.addEventListener('load', checkUrlForShare);
 
   function currentLevelObject() {
     return {
@@ -688,6 +831,28 @@
   document.getElementById('dev-open-editor-btn').addEventListener('click', () => openEditor(null));
   document.getElementById('dev-open-mylevels-btn').addEventListener('click', () => openMyLevels());
 
+  // ===== 開發者模式起始關卡：動態列出啟用中的自製關卡 =====
+  const devLevelGroup = document.getElementById('dev-level-group');
+  function refreshDevLevels() {
+    if (!devLevelGroup) return;
+    // 移除舊的自製按鈕
+    devLevelGroup.querySelectorAll('.seg-btn.custom').forEach(b => b.remove());
+    const enabled = getEnabledCustomLevels();
+    enabled.forEach((lv, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'seg-btn custom';
+      btn.dataset.level = String(10 + i);
+      const shortName = (lv.name || '自製').slice(0, 6);
+      btn.innerHTML = `🎨 ${shortName}`;
+      btn.title = lv.name + '（自製關卡）';
+      devLevelGroup.appendChild(btn);
+    });
+  }
+  // 主畫面進入開發者模式時 refresh
+  document.getElementById('dev-mode-btn').addEventListener('click', refreshDevLevels);
+  // 第一次載入也 refresh 一下（避免 race）
+  refreshDevLevels();
+
   // ===== 文字 dialog（匯入/匯出共用） =====
   function openTextDialog(title, content, onConfirm) {
     document.getElementById('td-title').textContent = title;
@@ -760,6 +925,9 @@
         ed.mirrorMode = !ed.mirrorMode;
         mirrorBtn.classList.toggle('active', ed.mirrorMode);
         render();
+      }
+      if (e.key === 'r' || e.key === 'R') {
+        setTool(ed.tool === 'rect' ? 'paint' : 'rect');
       }
     }
   });
