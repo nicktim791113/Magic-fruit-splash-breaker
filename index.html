@@ -158,16 +158,41 @@
               <button class="ed-tile"        data-mat="."><span class="ed-emoji">⬜</span><span class="ed-tile-name">橡皮擦</span></button>
             </div>
 
-            <div class="ed-section-title">🛠️ 工具</div>
+            <div class="ed-section-title">🛠️ 工具 <small>(互斥，選一個用)</small></div>
             <div class="ed-tools">
               <button id="ed-paint-btn" class="ed-tool active"><span class="ed-emoji">✏️</span><span class="ed-tile-name">塗繪</span></button>
-              <button id="ed-rect-btn" class="ed-tool"><span class="ed-emoji">▭</span><span class="ed-tile-name">框選</span></button>
+              <button id="ed-rect-btn"  class="ed-tool"><span class="ed-emoji">▭</span><span class="ed-tile-name">框選</span></button>
+              <button id="ed-pick-btn"  class="ed-tool"><span class="ed-emoji">🎯</span><span class="ed-tile-name">滴管</span></button>
+              <button id="ed-bucket-btn" class="ed-tool"><span class="ed-emoji">🎨</span><span class="ed-tile-name">油漆桶</span></button>
+            </div>
+
+            <div class="ed-section-title">⚡ 動作 <small>(按一下立即執行)</small></div>
+            <div class="ed-tools">
               <button id="ed-mirror-btn" class="ed-tool"><span class="ed-emoji">🪞</span><span class="ed-tile-name">鏡像</span></button>
               <button id="ed-undo-btn" class="ed-tool"><span class="ed-emoji">↩</span><span class="ed-tile-name">撤銷</span></button>
               <button id="ed-redo-btn" class="ed-tool"><span class="ed-emoji">↪</span><span class="ed-tile-name">重做</span></button>
               <button id="ed-clear-btn" class="ed-tool"><span class="ed-emoji">🗑</span><span class="ed-tile-name">全清</span></button>
+              <button id="ed-replace-btn" class="ed-tool"><span class="ed-emoji">🔄</span><span class="ed-tile-name">取代</span></button>
+              <button id="ed-flipH-btn" class="ed-tool"><span class="ed-emoji">↔</span><span class="ed-tile-name">翻H</span></button>
+              <button id="ed-flipV-btn" class="ed-tool"><span class="ed-emoji">↕</span><span class="ed-tile-name">翻V</span></button>
+              <button id="ed-rot-btn" class="ed-tool"><span class="ed-emoji">🔁</span><span class="ed-tile-name">180°</span></button>
+              <button id="ed-random-btn" class="ed-tool"><span class="ed-emoji">🎲</span><span class="ed-tile-name">隨機</span></button>
+              <button id="ed-fill-btn" class="ed-tool"><span class="ed-emoji">🪣</span><span class="ed-tile-name">整關填</span></button>
               <button id="ed-template-btn" class="ed-tool"><span class="ed-emoji">📋</span><span class="ed-tile-name">樣板</span></button>
-              <button id="ed-fill-btn" class="ed-tool"><span class="ed-emoji">🪣</span><span class="ed-tile-name">整片填</span></button>
+            </div>
+
+            <div class="ed-section-title">📊 統計</div>
+            <div id="ed-stats" class="ed-stats">
+              <div class="ed-stat-row">
+                <span class="ed-stat-label">總目標</span>
+                <span id="ed-stat-total" class="ed-stat-val">0</span>
+              </div>
+              <div class="ed-stat-row">
+                <span class="ed-stat-label">難度</span>
+                <span id="ed-stat-diff" class="ed-stat-val">⭐</span>
+              </div>
+              <div id="ed-stat-breakdown" class="ed-stat-breakdown"></div>
+              <div class="ed-stat-hint" id="ed-stat-hint"></div>
             </div>
 
             <div class="ed-section-title">💾 動作</div>

@@ -17,14 +17,16 @@
     theme: 'warm',
     selectedMat: 'B',
     mirrorMode: false,
-    tool: 'paint',            // 'paint' | 'rect'
+    tool: 'paint',            // 'paint' | 'rect' | 'pick' | 'bucket'
     rectStart: null,          // { r, c } 框選起點
     rectEnd: null,
+    hoverRC: null,            // 滑鼠 hover 中的格子
     history: [],
     redo: [],
     editingId: null,
     drawingActive: false,
   };
+  const DRAFT_KEY = 'mfsb_editor_draft';
 
   // ===== localStorage CRUD =====
   function loadAll() {
@@ -103,16 +105,28 @@
   const palette = document.getElementById('ed-palette');
   const paintBtn = document.getElementById('ed-paint-btn');
   const rectBtn = document.getElementById('ed-rect-btn');
+  const pickBtn = document.getElementById('ed-pick-btn');
+  const bucketBtn = document.getElementById('ed-bucket-btn');
   const mirrorBtn = document.getElementById('ed-mirror-btn');
   const undoBtn = document.getElementById('ed-undo-btn');
   const redoBtn = document.getElementById('ed-redo-btn');
   const clearBtn = document.getElementById('ed-clear-btn');
   const tplBtn = document.getElementById('ed-template-btn');
   const fillBtn = document.getElementById('ed-fill-btn');
+  const replaceBtn = document.getElementById('ed-replace-btn');
+  const flipHBtn = document.getElementById('ed-flipH-btn');
+  const flipVBtn = document.getElementById('ed-flipV-btn');
+  const rotBtn = document.getElementById('ed-rot-btn');
+  const randomBtn = document.getElementById('ed-random-btn');
   const helpBtn = document.getElementById('ed-help-btn');
   const helpDrawer = document.getElementById('ed-help-drawer');
   const helpCloseBtn = document.getElementById('ed-help-close');
   const shareBtn = document.getElementById('ed-share-btn');
+  // 統計區
+  const statTotal = document.getElementById('ed-stat-total');
+  const statDiff  = document.getElementById('ed-stat-diff');
+  const statBreakdown = document.getElementById('ed-stat-breakdown');
+  const statHint  = document.getElementById('ed-stat-hint');
 
   // ===== 工具：空 grid =====
   function makeEmptyGrid(rows) {
@@ -251,7 +265,7 @@
   }
   function pushHistory() {
     ed.history.push(snapshot());
-    if (ed.history.length > 80) ed.history.shift();
+    if (ed.history.length > 200) ed.history.shift(); // 撤銷層級從 80 → 200
     ed.redo.length = 0;
   }
   function undo() {
@@ -284,15 +298,18 @@
     if (changed) render();
   }
 
+  // 行列標尺尺寸
+  const RULER_W = 22, RULER_H = 18;
+
   // ===== 渲染編輯器 canvas =====
   function render() {
     const W = canvas.width;
     const rows = ed.grid.length;
-    const cellW = (W - 12) / COLS;
+    const cellW = (W - 12 - RULER_W) / COLS;
     const cellH = cellW * 0.62;
-    const totalH = rows * (cellH + 2) + 10;
+    const totalH = rows * (cellH + 2) + 10 + RULER_H;
     if (Math.abs(canvas.height - totalH) > 2) {
-      canvas.height = Math.max(120, Math.min(900, totalH));
+      canvas.height = Math.max(140, Math.min(900, totalH));
     }
     const H = canvas.height;
 
@@ -300,16 +317,36 @@
     // 背景
     ctx.fillStyle = '#fff8e1';
     roundRect(ctx, 0, 0, W, H, 10); ctx.fill();
+
+    const ox = 6 + RULER_W;  // 格子起始 X
+    const oy = 6 + RULER_H;  // 格子起始 Y
+
+    // 行列標尺（A-L、1-N）
+    ctx.fillStyle = '#90a4ae';
+    ctx.font = 'bold 11px "Comic Sans MS", "Microsoft JhengHei", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // 上邊：A B C ... L（12 個）
+    for (let c = 0; c < COLS; c++) {
+      const x = ox + c * cellW + cellW / 2;
+      ctx.fillText(String.fromCharCode(65 + c), x, oy - RULER_H / 2);
+    }
+    // 左邊：1 2 3 ... N
+    for (let r = 0; r < rows; r++) {
+      const y = oy + r * (cellH + 2) + cellH / 2;
+      ctx.fillText(String(r + 1), ox - RULER_W / 2, y);
+    }
+
     // 格線
     ctx.strokeStyle = 'rgba(120,120,120,0.18)';
     ctx.lineWidth = 1;
     for (let r = 0; r <= rows; r++) {
-      const y = 6 + r * (cellH + 2);
-      ctx.beginPath(); ctx.moveTo(6, y); ctx.lineTo(W - 6, y); ctx.stroke();
+      const y = oy + r * (cellH + 2);
+      ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + COLS * cellW, y); ctx.stroke();
     }
     for (let c = 0; c <= COLS; c++) {
-      const x = 6 + c * cellW;
-      ctx.beginPath(); ctx.moveTo(x, 6); ctx.lineTo(x, 6 + rows * (cellH + 2)); ctx.stroke();
+      const x = ox + c * cellW;
+      ctx.beginPath(); ctx.moveTo(x, oy); ctx.lineTo(x, oy + rows * (cellH + 2)); ctx.stroke();
     }
     // 鏡像中軸
     if (ed.mirrorMode) {
@@ -317,8 +354,8 @@
       ctx.setLineDash([4, 4]);
       ctx.lineWidth = 2;
       ctx.beginPath();
-      const mx = 6 + (COLS / 2) * cellW;
-      ctx.moveTo(mx, 6); ctx.lineTo(mx, 6 + rows * (cellH + 2));
+      const mx = ox + (COLS / 2) * cellW;
+      ctx.moveTo(mx, oy); ctx.lineTo(mx, oy + rows * (cellH + 2));
       ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -331,9 +368,31 @@
       for (let c = 0; c < COLS; c++) {
         const ch = row[c];
         if (ch === '.') continue;
-        const x = 6 + c * cellW + cellW / 2;
-        const y = 6 + r * (cellH + 2) + cellH / 2 + 2;
+        const x = ox + c * cellW + cellW / 2;
+        const y = oy + r * (cellH + 2) + cellH / 2 + 2;
         drawCellGlyph(ch, x, y, cellW, cellH);
+      }
+    }
+
+    // hover 預覽（半透明顯示要塗的素材）
+    if (ed.hoverRC && (ed.tool === 'paint' || ed.tool === 'bucket') && ed.selectedMat !== '.') {
+      const { r, c } = ed.hoverRC;
+      if (r >= 0 && r < rows && c >= 0 && c < COLS) {
+        const x = ox + c * cellW + cellW / 2;
+        const y = oy + r * (cellH + 2) + cellH / 2 + 2;
+        ctx.globalAlpha = 0.4;
+        drawCellGlyph(ed.selectedMat, x, y, cellW, cellH);
+        ctx.globalAlpha = 1;
+        // 鏡像 hover 預覽
+        if (ed.mirrorMode) {
+          const mc = COLS - 1 - c;
+          if (mc !== c) {
+            const x2 = ox + mc * cellW + cellW / 2;
+            ctx.globalAlpha = 0.4;
+            drawCellGlyph(ed.selectedMat, x2, y, cellW, cellH);
+            ctx.globalAlpha = 1;
+          }
+        }
       }
     }
 
@@ -343,8 +402,8 @@
       const r1 = Math.max(ed.rectStart.r, ed.rectEnd.r);
       const c0 = Math.min(ed.rectStart.c, ed.rectEnd.c);
       const c1 = Math.max(ed.rectStart.c, ed.rectEnd.c);
-      const x = 6 + c0 * cellW;
-      const y = 6 + r0 * (cellH + 2);
+      const x = ox + c0 * cellW;
+      const y = oy + r0 * (cellH + 2);
       const w = (c1 - c0 + 1) * cellW;
       const h = (r1 - r0 + 1) * (cellH + 2) - 2;
       ctx.fillStyle = 'rgba(255, 152, 0, 0.18)';
@@ -355,6 +414,9 @@
       ctx.strokeRect(x, y, w, h);
       ctx.setLineDash([]);
     }
+
+    // 更新統計
+    updateStats();
   }
 
   const CELL_COLORS = {
@@ -394,21 +456,38 @@
     const rect = canvas.getBoundingClientRect();
     const cx = ((e.touches ? e.touches[0].clientX : e.clientX) - rect.left) * (canvas.width / rect.width);
     const cy = ((e.touches ? e.touches[0].clientY : e.clientY) - rect.top)  * (canvas.height / rect.height);
-    const cellW = (canvas.width - 12) / COLS;
+    const cellW = (canvas.width - 12 - RULER_W) / COLS;
     const cellH = cellW * 0.62;
-    const c = Math.floor((cx - 6) / cellW);
-    const r = Math.floor((cy - 6) / (cellH + 2));
+    const c = Math.floor((cx - 6 - RULER_W) / cellW);
+    const r = Math.floor((cy - 6 - RULER_H) / (cellH + 2));
     return { r, c };
   }
 
   let lastRC = { r: -1, c: -1 };
   function onPointerDown(e) {
     e.preventDefault();
-    ed.drawingActive = true;
     const { r, c } = eventToRC(e);
+    if (r < 0 || r >= ed.grid.length || c < 0 || c >= COLS) return;
+    ed.drawingActive = true;
     if (ed.tool === 'rect') {
       ed.rectStart = { r: clampRow(r), c: clampCol(c) };
       ed.rectEnd = { ...ed.rectStart };
+      render();
+      return;
+    }
+    if (ed.tool === 'pick') {
+      const ch = ed.grid[r][c];
+      if (ch && ch !== '.') {
+        ed.selectedMat = ch;
+        syncPaletteUI();
+      }
+      // 用完滴管自動回塗繪
+      setTool('paint');
+      return;
+    }
+    if (ed.tool === 'bucket') {
+      pushHistory();
+      bucketFill(r, c, ed.selectedMat);
       render();
       return;
     }
@@ -417,19 +496,34 @@
     lastRC = { r, c };
   }
   function onPointerMove(e) {
+    const { r, c } = eventToRC(e);
+    // 更新 hover
+    if (r >= 0 && r < ed.grid.length && c >= 0 && c < COLS) {
+      if (!ed.hoverRC || ed.hoverRC.r !== r || ed.hoverRC.c !== c) {
+        ed.hoverRC = { r, c };
+        if (!ed.drawingActive) render();
+      }
+    }
     if (!ed.drawingActive) return;
     e.preventDefault();
-    const { r, c } = eventToRC(e);
     if (ed.tool === 'rect') {
       if (!ed.rectStart) return;
       ed.rectEnd = { r: clampRow(r), c: clampCol(c) };
       render();
       return;
     }
+    if (ed.tool !== 'paint') return; // 滴管/油漆桶只在 down 觸發
     if (r === lastRC.r && c === lastRC.c) return;
     paintAt(r, c);
     lastRC = { r, c };
   }
+  function onPointerLeave() {
+    if (ed.hoverRC) {
+      ed.hoverRC = null;
+      render();
+    }
+  }
+  canvas.addEventListener('mouseleave', onPointerLeave);
   function onPointerUp() {
     if (ed.tool === 'rect' && ed.rectStart && ed.rectEnd) {
       // 落筆：填滿矩形範圍
@@ -469,9 +563,8 @@
   // ===== 工具列事件 =====
   palette.querySelectorAll('.ed-tile').forEach(btn => {
     btn.addEventListener('click', () => {
-      palette.querySelectorAll('.ed-tile').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
       ed.selectedMat = btn.dataset.mat;
+      syncPaletteUI();
     });
   });
 
@@ -479,11 +572,44 @@
     ed.tool = t;
     paintBtn.classList.toggle('active', t === 'paint');
     rectBtn.classList.toggle('active', t === 'rect');
+    pickBtn.classList.toggle('active', t === 'pick');
+    bucketBtn.classList.toggle('active', t === 'bucket');
     ed.rectStart = null; ed.rectEnd = null;
+    canvas.style.cursor = (t === 'pick') ? 'cell' : 'crosshair';
     render();
   }
   paintBtn.addEventListener('click', () => setTool('paint'));
   rectBtn.addEventListener('click', () => setTool('rect'));
+  pickBtn.addEventListener('click', () => setTool('pick'));
+  bucketBtn.addEventListener('click', () => setTool('bucket'));
+
+  // 同步素材調色盤 UI
+  function syncPaletteUI() {
+    palette.querySelectorAll('.ed-tile').forEach(b => {
+      b.classList.toggle('active', b.dataset.mat === ed.selectedMat);
+    });
+  }
+
+  // 連通填充（4 向 flood fill）：把連通的相同字元換成新素材
+  function bucketFill(r, c, newCh) {
+    const old = ed.grid[r][c];
+    if (old === newCh) return;
+    const rows = ed.grid.length;
+    const stack = [[r, c]];
+    let count = 0;
+    while (stack.length && count < rows * COLS) {
+      const [rr, cc] = stack.pop();
+      if (rr < 0 || rr >= rows || cc < 0 || cc >= COLS) continue;
+      if (ed.grid[rr][cc] !== old) continue;
+      setCell(rr, cc, newCh);
+      if (ed.mirrorMode) {
+        const mc = COLS - 1 - cc;
+        if (mc !== cc) setCell(rr, mc, newCh);
+      }
+      stack.push([rr - 1, cc], [rr + 1, cc], [rr, cc - 1], [rr, cc + 1]);
+      count++;
+    }
+  }
 
   mirrorBtn.addEventListener('click', () => {
     ed.mirrorMode = !ed.mirrorMode;
@@ -500,10 +626,68 @@
   });
   fillBtn.addEventListener('click', () => {
     pushHistory();
-    ed.grid = ed.grid.map(() => ed.selectedMat.repeat(COLS));
+    // 整關填：所有非空格改成當前素材（保留空格）
+    ed.grid = ed.grid.map(row => {
+      let out = '';
+      for (let i = 0; i < row.length; i++) {
+        out += (row[i] === '.') ? '.' : ed.selectedMat;
+      }
+      return out;
+    });
     render();
   });
   tplBtn.addEventListener('click', () => openTemplates());
+
+  // ===== 動作工具 =====
+  flipHBtn.addEventListener('click', () => {
+    pushHistory();
+    ed.grid = ed.grid.map(row => row.split('').reverse().join(''));
+    render();
+  });
+  flipVBtn.addEventListener('click', () => {
+    pushHistory();
+    ed.grid = ed.grid.slice().reverse();
+    render();
+  });
+  rotBtn.addEventListener('click', () => {
+    pushHistory();
+    ed.grid = ed.grid.slice().reverse().map(row => row.split('').reverse().join(''));
+    render();
+  });
+  replaceBtn.addEventListener('click', () => {
+    const from = prompt('要把哪個素材取代掉？\n輸入字元（B/W/F/S/O/H/X/G/?/N/Z 或 . 為空）：', ed.selectedMat);
+    if (from === null) return;
+    const to = prompt('要換成什麼？\n輸入字元（B/W/F/S/O/H/X/G/?/N/Z 或 . 為空）：', 'B');
+    if (to === null) return;
+    if (!isValidMat(from) || !isValidMat(to)) { alert('字元無效'); return; }
+    pushHistory();
+    ed.grid = ed.grid.map(row => row.split('').map(ch => ch === from ? to : ch).join(''));
+    render();
+  });
+  randomBtn.addEventListener('click', () => {
+    const sel = prompt('在「空格」隨機填入下列素材（最多 6 個字元，例：BBWF）：\n注意：只填空格，不會覆蓋既有素材。', 'BBWWF');
+    if (!sel) return;
+    const pool = sel.split('').filter(isValidMat);
+    if (!pool.length) { alert('沒有有效素材'); return; }
+    const density = parseFloat(prompt('密度 0.1 ~ 1.0（多少比例的空格被填上）', '0.6') || '0.6');
+    pushHistory();
+    ed.grid = ed.grid.map(row => {
+      let out = '';
+      for (let i = 0; i < row.length; i++) {
+        const ch = row[i];
+        if (ch !== '.') { out += ch; continue; }
+        if (Math.random() < density) {
+          out += pool[Math.floor(Math.random() * pool.length)];
+        } else { out += '.'; }
+      }
+      return out;
+    });
+    render();
+  });
+
+  function isValidMat(ch) {
+    return ch === '.' || 'BWFSOHXG?NZ'.includes(ch);
+  }
 
   // ===== 屬性面板事件 =====
   nameInput.addEventListener('input', () => { ed.name = nameInput.value || '我的關卡'; });
@@ -623,12 +807,14 @@
       if (exist) {
         Object.assign(exist, lv, { id: ed.editingId, createdAt: exist.createdAt });
         saveAll(data);
+        clearDraft();
         alert('已更新「' + lv.name + '」');
         return;
       }
     }
     ed.editingId = lv.id;
     upsertLevel(lv);
+    clearDraft();
     alert('已存檔「' + lv.name + '」');
   }
 
@@ -658,12 +844,35 @@
       ed.grid = lv.grid.slice();
       ed.rows = ed.grid.length;
     } else {
-      ed.editingId = null;
-      ed.name = nextLevelName();
-      ed.speed = 400;
-      ed.theme = 'warm';
-      ed.rows = 7;
-      ed.grid = makeEmptyGrid(7);
+      // 新增空白關卡前，先檢查是否有草稿可救回
+      const draft = loadDraft();
+      if (draft && draft.grid && draft.grid.length &&
+          !draft.grid.every(row => /^\.+$/.test(row))) {
+        const since = Math.floor((Date.now() - draft.ts) / 60000);
+        if (confirm(`找到 ${since} 分鐘前的草稿「${draft.name || '未命名'}」\n要繼續編輯嗎？\n（取消會開新空白關卡）`)) {
+          ed.editingId = draft.id || null;
+          ed.name = draft.name || '我的關卡';
+          ed.speed = draft.speed || 400;
+          ed.theme = draft.theme || 'warm';
+          ed.grid = draft.grid.slice();
+          ed.rows = ed.grid.length;
+        } else {
+          ed.editingId = null;
+          ed.name = nextLevelName();
+          ed.speed = 400;
+          ed.theme = 'warm';
+          ed.rows = 7;
+          ed.grid = makeEmptyGrid(7);
+          clearDraft();
+        }
+      } else {
+        ed.editingId = null;
+        ed.name = nextLevelName();
+        ed.speed = 400;
+        ed.theme = 'warm';
+        ed.rows = 7;
+        ed.grid = makeEmptyGrid(7);
+      }
     }
     ed.history.length = 0;
     ed.redo.length = 0;
@@ -924,20 +1133,134 @@
     });
   }
 
-  // ===== 鍵盤捷徑 =====
+  // ===== 鍵盤捷徑（撤銷/重做/鏡像） =====
   window.addEventListener('keydown', (e) => {
-    if (!editorScreen.classList.contains('hidden')) {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) { e.preventDefault(); redo(); }
-      if (e.key === 'm' || e.key === 'M') {
-        ed.mirrorMode = !ed.mirrorMode;
-        mirrorBtn.classList.toggle('active', ed.mirrorMode);
-        render();
-      }
-      if (e.key === 'r' || e.key === 'R') {
-        setTool(ed.tool === 'rect' ? 'paint' : 'rect');
+    if (editorScreen.classList.contains('hidden')) return;
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea') return;
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); return; }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) { e.preventDefault(); redo(); return; }
+    if (e.key === 'm' || e.key === 'M') {
+      ed.mirrorMode = !ed.mirrorMode;
+      mirrorBtn.classList.toggle('active', ed.mirrorMode);
+      render();
+    }
+  });
+
+  // ===== 統計 + 難度估算 =====
+  const MAT_BADGES = {
+    'B': { emoji: '🟥', name: '磚', hp: 1, score: 10 },
+    'W': { emoji: '💧', name: '水', hp: 1, score: 15 },
+    'F': { emoji: '🍉', name: '西瓜', hp: 2, score: 25 },
+    'S': { emoji: '🍓', name: '草莓', hp: 2, score: 25 },
+    'O': { emoji: '🍊', name: '橘子', hp: 2, score: 25 },
+    'H': { emoji: '🛡', name: '鋼', hp: 3, score: 40 },
+    'X': { emoji: '⛔', name: '不可破', hp: 0, score: 0 },
+    'G': { emoji: '💎', name: '寶石', hp: 1, score: 100 },
+    '?': { emoji: '🎁', name: '神秘', hp: 1, score: 20 },
+    'N': { emoji: '🌑', name: '隱藏', hp: 2, score: 30 },
+    'Z': { emoji: '⚡', name: '加速', hp: 1, score: 20 },
+  };
+  function updateStats() {
+    if (!statTotal) return;
+    const counts = {};
+    let totalHp = 0, maxPotentialScore = 0;
+    let breakable = 0;
+    for (const row of ed.grid) {
+      for (const ch of row) {
+        if (ch === '.') continue;
+        counts[ch] = (counts[ch] || 0) + 1;
+        const b = MAT_BADGES[ch];
+        if (b && ch !== 'X') {
+          totalHp += b.hp;
+          maxPotentialScore += b.score;
+          breakable++;
+        }
       }
     }
+    statTotal.textContent = breakable;
+    // 分類顯示
+    statBreakdown.innerHTML = '';
+    const order = ['B','W','F','S','O','H','X','G','?','N','Z'];
+    order.forEach(ch => {
+      const n = counts[ch] || 0;
+      if (n <= 0) return;
+      const span = document.createElement('span');
+      span.className = 'ed-stat-cell';
+      span.textContent = (MAT_BADGES[ch].emoji) + ' ' + n;
+      statBreakdown.appendChild(span);
+    });
+    // 難度估算（規則式）：基於 hp 數、球速、不可破比例
+    const speed = ed.speed;
+    const xCount = counts['X'] || 0;
+    let score = totalHp + Math.floor(speed / 40);
+    if (xCount > 0) score += Math.min(20, xCount * 1.5);  // 不可破讓關卡更難
+    // 等級映射
+    let stars;
+    if (score < 30)  stars = '⭐';
+    else if (score < 55) stars = '⭐⭐';
+    else if (score < 85) stars = '⭐⭐⭐';
+    else if (score < 120) stars = '⭐⭐⭐⭐';
+    else stars = '⭐⭐⭐⭐⭐';
+    statDiff.textContent = stars + ' (' + score + ')';
+    // 提示
+    const hints = [];
+    if (breakable === 0) hints.push('⚠️ 還沒有可破壞目標，遊戲無法過關');
+    if (breakable > 100) hints.push('💡 目標超過 100 個，玩起來可能太久');
+    if (speed > 700 && breakable > 60) hints.push('💡 球速很快又很多目標，難度爆表');
+    if (xCount > breakable * 0.4) hints.push('⚠️ 不可破磚太多，玩家可能找不到角度');
+    statHint.textContent = hints.join(' ｜ ');
+  }
+
+  // ===== 自動儲存草稿 =====
+  function saveDraft() {
+    if (document.getElementById('editor-screen').classList.contains('hidden')) return;
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        id: ed.editingId,
+        name: ed.name,
+        speed: ed.speed,
+        theme: ed.theme,
+        grid: ed.grid,
+        rows: ed.rows,
+        ts: Date.now(),
+      }));
+    } catch (e) {}
+  }
+  function loadDraft() {
+    try {
+      const d = JSON.parse(localStorage.getItem(DRAFT_KEY));
+      if (!d || !d.grid || !d.ts) return null;
+      if (Date.now() - d.ts > 7 * 24 * 60 * 60 * 1000) return null; // 7 天過期
+      return d;
+    } catch { return null; }
+  }
+  function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }
+  setInterval(saveDraft, 30000); // 每 30 秒
+  window.addEventListener('beforeunload', saveDraft);
+
+  // ===== 數字鍵 1-9 0 切素材 =====
+  const KEY_TO_MAT = { '1':'B','2':'W','3':'F','4':'S','5':'O','6':'H','7':'X','8':'G','9':'?','0':'.' };
+  // 補：N (隱藏) Z (加速) 用字母鍵
+  window.addEventListener('keydown', (e) => {
+    if (document.getElementById('editor-screen').classList.contains('hidden')) return;
+    // 不在輸入框內才生效
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea') return;
+    const m = KEY_TO_MAT[e.key];
+    if (m) {
+      ed.selectedMat = m;
+      syncPaletteUI();
+      e.preventDefault();
+    }
+    if (e.key === 'n' || e.key === 'N') { ed.selectedMat = 'N'; syncPaletteUI(); }
+    if (e.key === 'z' || e.key === 'Z') {
+      if (!(e.ctrlKey || e.metaKey)) { ed.selectedMat = 'Z'; syncPaletteUI(); }
+    }
+    if (e.key === 'e' || e.key === 'E') { setTool('paint'); }
+    if (e.key === 'r' && !e.ctrlKey && !e.metaKey) { setTool(ed.tool === 'rect' ? 'paint' : 'rect'); }
+    if (e.key === 'i' || e.key === 'I') { setTool('pick'); }
+    if (e.key === 'b' || e.key === 'B') { setTool(ed.tool === 'bucket' ? 'paint' : 'bucket'); }
   });
 
   // ===== 試玩結束的 callback =====
