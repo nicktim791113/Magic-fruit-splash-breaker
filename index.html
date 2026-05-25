@@ -106,6 +106,7 @@
           <button id="ed-back-btn" class="ghost-btn small">⬅ 返回</button>
           <h2 class="ed-title">🎨 關卡設計器</h2>
           <div class="ed-header-right">
+            <button id="ed-dark-btn" class="ghost-btn small" title="切換暗色模式">🌙</button>
             <button id="ed-help-btn" class="ghost-btn small" title="說明">❓</button>
             <button id="ed-mylevels-btn" class="ghost-btn small">📂 我的</button>
           </div>
@@ -139,6 +140,18 @@
                     <option value="candy">🍭 糖果</option>
                   </select>
                 </label>
+                <label class="ed-field">
+                  <span>標籤 <small>(逗號分隔，例：給小孩,難關)</small></span>
+                  <input id="ed-tags" type="text" placeholder="可空白" maxlength="60">
+                </label>
+                <label class="ed-field">
+                  <span>計時挑戰 <output id="ed-timer-val">關閉</output></span>
+                  <input id="ed-timer" type="range" min="0" max="300" step="10" value="0">
+                </label>
+                <label class="ed-field">
+                  <span>起始球數 <output id="ed-startballs-val">1</output></span>
+                  <input id="ed-startballs" type="range" min="1" max="3" step="1" value="1">
+                </label>
               </div>
             </details>
 
@@ -155,6 +168,9 @@
               <button class="ed-tile"        data-mat="?"><span class="ed-emoji">🎁</span><span class="ed-tile-name">神秘箱</span></button>
               <button class="ed-tile"        data-mat="N"><span class="ed-emoji">🌑</span><span class="ed-tile-name">隱藏磚</span></button>
               <button class="ed-tile"        data-mat="Z"><span class="ed-emoji">⚡</span><span class="ed-tile-name">加速磚</span></button>
+              <button class="ed-tile"        data-mat="M"><span class="ed-emoji">🔁</span><span class="ed-tile-name">移動磚</span></button>
+              <button class="ed-tile"        data-mat="K"><span class="ed-emoji">🔑</span><span class="ed-tile-name">鑰匙</span></button>
+              <button class="ed-tile"        data-mat="L"><span class="ed-emoji">🔒</span><span class="ed-tile-name">鎖磚</span></button>
               <button class="ed-tile"        data-mat="."><span class="ed-emoji">⬜</span><span class="ed-tile-name">橡皮擦</span></button>
             </div>
 
@@ -303,6 +319,30 @@
 
         <p class="ml-hint">啟用中的關卡會在正式 10 關之後依序播放</p>
 
+        <!-- 搜尋與排序 -->
+        <div class="ml-filter-bar">
+          <input id="ml-search" type="search" placeholder="🔍 搜尋名稱..." />
+          <select id="ml-sort">
+            <option value="custom">↕ 自訂順序</option>
+            <option value="name">A→Z 名稱</option>
+            <option value="newest">🕐 最新建立</option>
+            <option value="updated">✏️ 最近編輯</option>
+            <option value="targets">🎯 目標數</option>
+            <option value="speed">⚡ 球速</option>
+            <option value="played">🎮 玩過次數</option>
+          </select>
+          <button id="ml-batch-toggle" class="ghost-btn small" title="批次選取">☑️</button>
+        </div>
+
+        <!-- 批次工具列 -->
+        <div id="ml-batch-bar" class="ml-batch-bar hidden">
+          <span id="ml-batch-count">已選 0 張</span>
+          <button id="ml-batch-enable" class="ghost-btn small">啟用</button>
+          <button id="ml-batch-disable" class="ghost-btn small">停用</button>
+          <button id="ml-batch-export" class="ghost-btn small">📤 匯出</button>
+          <button id="ml-batch-delete" class="ghost-btn small danger">🗑 刪除</button>
+        </div>
+
         <div id="ml-list" class="ml-list"></div>
 
         <div class="ml-empty hidden" id="ml-empty">
@@ -339,6 +379,57 @@
         </div>
       </section>
 
+      <!-- 分享 dialog（多種格式） -->
+      <section id="share-dialog" class="overlay hidden text-dialog-overlay">
+        <h2 class="ed-title">🔗 分享關卡</h2>
+        <div class="share-tabs">
+          <button class="share-tab active" data-tab="link">🌐 連結</button>
+          <button class="share-tab" data-tab="qr">📱 QR Code</button>
+          <button class="share-tab" data-tab="png">🖼️ PNG 圖</button>
+          <button class="share-tab" data-tab="emoji">💬 Emoji</button>
+        </div>
+        <div class="share-content">
+          <div class="share-pane active" data-pane="link">
+            <textarea id="share-link-text" readonly></textarea>
+            <p class="share-pane-hint">別人打開連結會自動匯入此關卡</p>
+          </div>
+          <div class="share-pane" data-pane="qr">
+            <div id="share-qr-box" class="share-qr-box"></div>
+            <p class="share-pane-hint">用手機掃描即可開啟並匯入</p>
+          </div>
+          <div class="share-pane" data-pane="png">
+            <canvas id="share-png-canvas" width="540" height="540"></canvas>
+            <p class="share-pane-hint">下載成 PNG 圖片，可貼到聊天室</p>
+          </div>
+          <div class="share-pane" data-pane="emoji">
+            <textarea id="share-emoji-text" readonly></textarea>
+            <p class="share-pane-hint">純 emoji 字串，貼到 Line/IG 直接展示</p>
+          </div>
+        </div>
+        <div class="td-actions">
+          <button id="share-copy-btn" class="big-btn confirm small">📋 複製</button>
+          <button id="share-download-btn" class="big-btn confirm small hidden">⬇ 下載 PNG</button>
+          <button id="share-close-btn" class="ghost-btn small">關閉</button>
+        </div>
+      </section>
+
+      <!-- 教學 dialog -->
+      <section id="tutorial-dialog" class="overlay hidden text-dialog-overlay">
+        <h2 class="ed-title" id="tut-title">🎓 快速教學</h2>
+        <div class="tut-step-indicator">
+          <span class="tut-dot active" data-step="1"></span>
+          <span class="tut-dot" data-step="2"></span>
+          <span class="tut-dot" data-step="3"></span>
+          <span class="tut-dot" data-step="4"></span>
+        </div>
+        <div id="tut-body" class="tut-body"></div>
+        <div class="td-actions">
+          <button id="tut-prev" class="ghost-btn small">← 上一步</button>
+          <button id="tut-next" class="big-btn confirm small">下一步 →</button>
+          <button id="tut-skip" class="ghost-btn small">略過</button>
+        </div>
+      </section>
+
       <!-- 過關畫面 -->
       <section id="clear-screen" class="overlay hidden">
         <h2 class="big-text">🎉 過關！</h2>
@@ -365,8 +456,15 @@
       <section id="pause-screen" class="overlay hidden">
         <h2 class="big-text">⏸ 暫停</h2>
         <button id="resume-btn" class="big-btn confirm">繼續</button>
+        <button id="back-editor-btn" class="ghost-btn hidden">🎨 回編輯器</button>
         <button id="quit-btn" class="ghost-btn">回主畫面</button>
       </section>
+
+      <!-- 試玩模式橫幅 -->
+      <div id="test-banner" class="test-banner hidden">
+        🎨 測試模式中 — 過關或失敗會回編輯器
+        <button id="test-banner-quit" class="ghost-btn small">回編輯器</button>
+      </div>
 
       <!-- 暫停按鈕（遊戲中） -->
       <button id="pause-btn" class="floating-btn hidden" aria-label="暫停">⏸</button>

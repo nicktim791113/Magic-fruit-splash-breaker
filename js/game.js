@@ -64,10 +64,14 @@
     '?': { type: 'mystery',       hp: 1 },
     'N': { type: 'hidden',        hp: 1, hidden: true },
     'Z': { type: 'speedup',       hp: 1 },
+    'M': { type: 'mover',         hp: 1 },                   // 移動磚（左右擺動）
+    'K': { type: 'key',           hp: 1 },                   // 鑰匙磚（破壞後解鎖所有 L）
+    'L': { type: 'lock',          hp: 999, locked: true },   // 鎖磚（要先打鑰匙才能破）
   };
   const MAT_EMOJI = {
     'B':'🟥','W':'💧','F':'🍉','S':'🍓','O':'🍊',
-    'H':'🛡️','X':'⛔','G':'💎','?':'🎁','N':'🌑','Z':'⚡','.':'⬜',
+    'H':'🛡️','X':'⛔','G':'💎','?':'🎁','N':'🌑','Z':'⚡',
+    'M':'🔁','K':'🔑','L':'🔒','.':'⬜',
   };
   const LEVELS = [
     {
@@ -258,6 +262,14 @@
   // 效果計時器（秒）
   const fx = { paddleWideT: 0, slowT: 0, doubleT: 0 };
 
+  // 連擊狀態
+  const combo = { count: 0, timer: 0, max: 0 };
+  // 計時挑戰
+  let levelTimer = 0;   // > 0 表示這關有時間限制（秒）
+  let levelTimeLeft = 0;
+  // 鑰匙鎖
+  let lockOpen = false;
+
   // 當前關卡資料（含主題）
   let currentLevel = null;
   let bgTheme = 'warm';
@@ -389,6 +401,10 @@
     fx.paddleWideT = 0;
     fx.slowT = 0;
     fx.doubleT = 0;
+    combo.count = 0; combo.timer = 0; combo.max = 0;
+    lockOpen = false;
+    levelTimer = lv.timer || 0;
+    levelTimeLeft = levelTimer;
     const rows = lv.grid;
     const totalH = rows.length * (BLOCK_H + BLOCK_GAP) - BLOCK_GAP;
     const offsetY = BLOCK_AREA_TOP + Math.max(0, ((BLOCK_AREA_BOTTOM - BLOCK_AREA_TOP) * 0.18));
@@ -400,17 +416,37 @@
         if (!mat) continue;
         const x = PLAY_AREA.left + BLOCK_GAP + c * (BLOCK_W + BLOCK_GAP);
         const y = offsetY + r * (BLOCK_H + BLOCK_GAP);
-        targets.push({
+        const tg = {
           x, y, w: BLOCK_W, h: BLOCK_H,
           type: mat.type, hp: mat.hp, maxHp: mat.hp,
           dead: false, fadeT: 0,
           hidden: !!mat.hidden,
+          locked: !!mat.locked,
           colorSeed: (r * 7 + c * 13) % 360,
-        });
+        };
+        // 移動磚：水平方向左右擺動
+        if (mat.type === 'mover') {
+          tg.baseX = x;
+          tg.amp = 38;
+          tg.speed = 1.4;
+          tg.phase = (r + c) * 0.7;
+        }
+        targets.push(tg);
       }
     }
     bgTheme = lv.theme || 'warm';
     resetBall(lv.speed);
+    // 起始多球
+    const startBalls = Math.max(1, Math.min(3, lv.startBalls || 1));
+    for (let i = 1; i < startBalls; i++) {
+      const angle = -Math.PI / 2 + (i === 1 ? -0.4 : 0.4);
+      extraBalls.push({
+        x: ball.x, y: ball.y, r: ball.r,
+        vx: Math.cos(angle) * ball.speed,
+        vy: Math.sin(angle) * ball.speed,
+        speed: ball.speed,
+      });
+    }
     updateHUD();
   }
 
@@ -490,6 +526,42 @@
     }
     if (fx.slowT > 0) fx.slowT -= dt;
     if (fx.doubleT > 0) fx.doubleT -= dt;
+    // 連擊計時
+    if (combo.timer > 0) {
+      combo.timer -= dt;
+      if (combo.timer <= 0) {
+        if (combo.count > combo.max) combo.max = combo.count;
+        combo.count = 0;
+      }
+    }
+    // 計時挑戰倒數
+    if (levelTimer > 0 && !ball.stuck) {
+      levelTimeLeft -= dt;
+      if (levelTimeLeft <= 0) {
+        levelTimeLeft = 0;
+        // 時間到 → 失敗
+        if (state === STATE.PLAYING) {
+          state = STATE.GAMEOVER;
+          if (levelIndex === -1 && testingMode && window.MFSB_EDITOR && window.MFSB_EDITOR.onTestPlayEnd) {
+            window.MFSB_EDITOR.onTestPlayEnd(false, score);
+            document.getElementById('test-banner').classList.add('hidden');
+            document.getElementById('back-editor-btn').classList.add('hidden');
+          } else {
+            showOverlay(gameOverScreen);
+            gameOverInfo.textContent = `⏱ 時間到！  分數：${score}`;
+            SFX.gameOver();
+          }
+          return;
+        }
+      }
+    }
+    // 移動磚動畫
+    for (const tg of targets) {
+      if (tg.dead || tg.type !== 'mover') continue;
+      tg.phase += tg.speed * dt;
+      const offset = Math.sin(tg.phase) * tg.amp;
+      tg.x = tg.baseX + offset;
+    }
 
     if (ball.stuck) {
       ball.x = paddle.x + paddle.w / 2;
@@ -638,6 +710,12 @@
       SFX.wall();
       return;
     }
+    // 鎖磚：未解鎖時純反彈
+    if (tg.type === 'lock' && !lockOpen) {
+      SFX.wall();
+      addText(tg.x + tg.w / 2, tg.y + tg.h / 2 - 12, '🔒 上鎖中', '#5d4037');
+      return;
+    }
     // 隱藏磚：第一次碰到「揭曉」，不算扣血
     if (tg.hidden) {
       tg.hidden = false;
@@ -713,6 +791,33 @@
       for (const b of extraBalls) { b.speed = Math.min(b.speed * 1.1, 1200); b.vx *= 1.1; b.vy *= 1.1; }
       addText(cx, cy - 14, '⚡ 加速！', '#ff6f00');
       scoreGain = 20;
+    } else if (tg.type === 'mover') {
+      SFX.brick();
+      addParticles(cx, cy, '#9c27b0', 16, { speed: 280, life: 0.55, r: 4 });
+      scoreGain = 35; // 移動磚較難打，給高分
+    } else if (tg.type === 'key') {
+      SFX.clear();
+      addParticles(cx, cy, '#ffc107', 30, { speed: 360, life: 0.8, r: 5 });
+      lockOpen = true;
+      addText(W / 2, H / 2 - 50, '🔑 解鎖所有 🔒！', '#ff6f00');
+      // 視覺：所有 lock 變成可破狀態
+      for (const t of targets) if (t.type === 'lock') t.locked = false;
+      scoreGain = 60;
+    } else if (tg.type === 'lock') {
+      SFX.fruitPop();
+      addParticles(cx, cy, '#795548', 22, { speed: 320, life: 0.7, r: 4 });
+      scoreGain = 50;
+    }
+    // 連擊系統
+    combo.count++;
+    combo.timer = 1.5;  // 1.5 秒內繼續打才算連擊
+    let mult = 1;
+    if (combo.count >= 10) mult = 3;
+    else if (combo.count >= 6) mult = 2;
+    else if (combo.count >= 3) mult = 1.5;
+    if (mult > 1) {
+      scoreGain = Math.floor(scoreGain * mult);
+      addText(cx, cy + 16, `🔥 ${combo.count} 連擊 ×${mult}`, '#e91e63');
     }
     if (fx.doubleT > 0) scoreGain *= 2;
     score += scoreGain;
@@ -732,6 +837,17 @@
       updateHUD();
       if (lives <= 0) {
         state = STATE.GAMEOVER;
+        // 試玩模式：失敗直接回編輯器
+        if (levelIndex === -1 && testingMode && window.MFSB_EDITOR && window.MFSB_EDITOR.onTestPlayEnd) {
+          window.MFSB_EDITOR.onTestPlayEnd(false, score);
+          document.getElementById('test-banner').classList.add('hidden');
+          document.getElementById('back-editor-btn').classList.add('hidden');
+          return;
+        }
+        // 自製關卡失敗也記統計
+        if (levelIndex === -1 && customPlayLevel && window.MFSB_EDITOR && window.MFSB_EDITOR.recordPlayStats) {
+          window.MFSB_EDITOR.recordPlayStats(customPlayLevel.id, score, false);
+        }
         showOverlay(gameOverScreen);
         gameOverInfo.textContent = `分數：${score}　關卡：${levelIndex + 1}`;
         SFX.gameOver();
@@ -747,12 +863,25 @@
     SFX.clear();
     spawnFireworks();
     setTimeout(() => {
-      // 試玩單張關卡：levelIndex === -1，過關後回編輯器
+      // 試玩單張關卡：levelIndex === -1
       if (levelIndex === -1) {
         state = STATE.TITLE;
-        if (window.MFSB_EDITOR && window.MFSB_EDITOR.onTestPlayEnd) {
-          window.MFSB_EDITOR.onTestPlayEnd(true, score);
+        if (testingMode) {
+          // 編輯器試玩：回編輯器
+          if (window.MFSB_EDITOR && window.MFSB_EDITOR.onTestPlayEnd) {
+            window.MFSB_EDITOR.onTestPlayEnd(true, score);
+          }
+        } else if (customPlayLevel) {
+          // 從我的關卡的正式試玩：記錄統計
+          if (window.MFSB_EDITOR && window.MFSB_EDITOR.recordPlayStats) {
+            window.MFSB_EDITOR.recordPlayStats(customPlayLevel.id, score, true);
+          }
+          if (window.MFSB_EDITOR && window.MFSB_EDITOR.onCustomPlayEnd) {
+            window.MFSB_EDITOR.onCustomPlayEnd(true, score);
+          }
         }
+        document.getElementById('test-banner').classList.add('hidden');
+        document.getElementById('back-editor-btn').classList.add('hidden');
         return;
       }
       const total = totalLevelCount();
@@ -952,15 +1081,20 @@
     ctx.font = 'bold 20px "Comic Sans MS", "Microsoft JhengHei", sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    const lv = LEVELS[levelIndex];
-    ctx.fillText(`${lv ? lv.name : ''}`, PLAY_AREA.left + 16, PLAY_AREA.top + (TOP_INFO_BAND - 14) / 2);
+    const lv = currentLevel || LEVELS[levelIndex];
+    let leftTxt = lv ? lv.name : '';
+    if (levelTimer > 0) leftTxt += `  ⏱${Math.ceil(levelTimeLeft)}s`;
+    ctx.fillText(leftTxt, PLAY_AREA.left + 16, PLAY_AREA.top + (TOP_INFO_BAND - 14) / 2);
 
     ctx.textAlign = 'right';
+    let rightTxt;
     if (gameMode === 'challenge') {
-      ctx.fillText(`❤️×${lives}  ${score}`, PLAY_AREA.right - 16, PLAY_AREA.top + (TOP_INFO_BAND - 14) / 2);
+      rightTxt = `❤️×${lives}  ${score}`;
     } else {
-      ctx.fillText(`分數 ${score}`, PLAY_AREA.right - 16, PLAY_AREA.top + (TOP_INFO_BAND - 14) / 2);
+      rightTxt = `分數 ${score}`;
     }
+    if (combo.count >= 3) rightTxt = `🔥${combo.count}  ` + rightTxt;
+    ctx.fillText(rightTxt, PLAY_AREA.right - 16, PLAY_AREA.top + (TOP_INFO_BAND - 14) / 2);
   }
 
   function drawPaddle() {
@@ -1042,7 +1176,10 @@
     else if (tg.type === 'gem')           drawGem(tg);
     else if (tg.type === 'mystery')       drawMystery(tg);
     else if (tg.type === 'speedup')       drawSpeedup(tg);
-    else if (tg.type === 'hidden')        drawBrick(tg); // 揭曉後當磚
+    else if (tg.type === 'hidden')        drawBrick(tg);
+    else if (tg.type === 'mover')         drawMover(tg);
+    else if (tg.type === 'key')           drawKey(tg);
+    else if (tg.type === 'lock')          drawLock(tg);
 
     // 受傷裂痕（鋼磚與多 hp 目標）
     if (tg.hp < tg.maxHp && tg.type !== 'indestructible') {
@@ -1177,6 +1314,66 @@
     ctx.setLineDash([]);
   }
 
+  function drawMover(tg) {
+    // 移動磚：紫色，有「移動」箭頭
+    const g = ctx.createLinearGradient(tg.x, tg.y, tg.x, tg.y + tg.h);
+    g.addColorStop(0, '#ce93d8');
+    g.addColorStop(1, '#7b1fa2');
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    roundRect(ctx, tg.x + 1, tg.y + 3, tg.w, tg.h, 6); ctx.fill();
+    ctx.fillStyle = g;
+    roundRect(ctx, tg.x, tg.y, tg.w, tg.h, 6); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${Math.floor(tg.h * 0.65)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('↔', tg.x + tg.w / 2, tg.y + tg.h / 2);
+  }
+  function drawKey(tg) {
+    const g = ctx.createLinearGradient(tg.x, tg.y, tg.x, tg.y + tg.h);
+    g.addColorStop(0, '#fff176');
+    g.addColorStop(1, '#f57f17');
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    roundRect(ctx, tg.x + 1, tg.y + 3, tg.w, tg.h, 6); ctx.fill();
+    ctx.fillStyle = g;
+    roundRect(ctx, tg.x, tg.y, tg.w, tg.h, 6); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = `${Math.floor(tg.h * 0.75)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🔑', tg.x + tg.w / 2, tg.y + tg.h / 2);
+  }
+  function drawLock(tg) {
+    // 鎖磚：未解鎖灰色厚重，解鎖後變一般磚塊樣
+    if (tg.locked && !lockOpen) {
+      const g = ctx.createLinearGradient(tg.x, tg.y, tg.x, tg.y + tg.h);
+      g.addColorStop(0, '#a1887f');
+      g.addColorStop(1, '#4e342e');
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      roundRect(ctx, tg.x + 1, tg.y + 3, tg.w, tg.h, 6); ctx.fill();
+      ctx.fillStyle = g;
+      roundRect(ctx, tg.x, tg.y, tg.w, tg.h, 6); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = `${Math.floor(tg.h * 0.7)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🔒', tg.x + tg.w / 2, tg.y + tg.h / 2);
+    } else {
+      // 解鎖後變成可破磚塊（一次破）
+      const g = ctx.createLinearGradient(tg.x, tg.y, tg.x, tg.y + tg.h);
+      g.addColorStop(0, '#ffcc80');
+      g.addColorStop(1, '#ef6c00');
+      ctx.fillStyle = 'rgba(0,0,0,0.18)';
+      roundRect(ctx, tg.x + 1, tg.y + 3, tg.w, tg.h, 6); ctx.fill();
+      ctx.fillStyle = g;
+      roundRect(ctx, tg.x, tg.y, tg.w, tg.h, 6); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = `${Math.floor(tg.h * 0.65)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🔓', tg.x + tg.w / 2, tg.y + tg.h / 2);
+    }
+  }
   function drawSpeedup(tg) {
     const cx = tg.x + tg.w / 2, cy = tg.y + tg.h / 2;
     const g = ctx.createLinearGradient(tg.x, tg.y, tg.x, tg.y + tg.h);
@@ -1313,7 +1510,9 @@
      document.getElementById('editor-screen'),
      document.getElementById('mylevels-screen'),
      document.getElementById('template-screen'),
-     document.getElementById('text-dialog')]
+     document.getElementById('text-dialog'),
+     document.getElementById('share-dialog'),
+     document.getElementById('tutorial-dialog')]
       .forEach(o => o && o.classList.add('hidden'));
   }
   function showOverlay(el) {
@@ -1424,6 +1623,23 @@
   document.getElementById('back-title-btn').addEventListener('click', backToTitle);
   document.getElementById('resume-btn').addEventListener('click', togglePause);
   document.getElementById('quit-btn').addEventListener('click', backToTitle);
+  // 暫停選單的「回編輯器」按鈕
+  document.getElementById('back-editor-btn').addEventListener('click', () => {
+    hideAllOverlays();
+    hud.classList.add('hidden');
+    pauseBtn.classList.add('hidden');
+    document.getElementById('test-banner').classList.add('hidden');
+    document.getElementById('back-editor-btn').classList.add('hidden');
+    state = STATE.TITLE;
+    testingMode = false;
+    if (window.MFSB_EDITOR && window.MFSB_EDITOR.onTestPlayEnd) {
+      window.MFSB_EDITOR.onTestPlayEnd(false, score);
+    }
+  });
+  // 試玩橫幅上的「回編輯器」按鈕
+  document.getElementById('test-banner-quit').addEventListener('click', () => {
+    document.getElementById('back-editor-btn').click();
+  });
   pauseBtn.addEventListener('click', togglePause);
 
   muteBtn.addEventListener('click', () => {
@@ -1531,10 +1747,16 @@
   requestAnimationFrame(loop);
 
   // ===== 對外 API（給 editor.js） =====
+  let testingMode = false;       // 試玩模式：過關/失敗不計分、回編輯
+  let customPlayLevel = null;    // 正式試玩中的自製關卡，用來統計
+
   window.MFSB = {
     startGameDev,
+    // 編輯器試玩：levelIndex=-1，過關回編輯
     startTestPlay(lvObj) {
       SFX.button();
+      testingMode = true;
+      customPlayLevel = null;
       gameMode = 'easy';
       score = 0;
       lives = 5;
@@ -1542,11 +1764,39 @@
       hideAllOverlays();
       hud.classList.remove('hidden');
       pauseBtn.classList.remove('hidden');
+      document.getElementById('back-editor-btn').classList.remove('hidden');
+      document.getElementById('test-banner').classList.remove('hidden');
+      loadLevel(-1, lvObj);
+      ensureAudio();
+    },
+    // 從我的關卡的 ▶ 按鈕：當作正式關卡玩，記錄統計
+    startCustomPlay(lvObj) {
+      SFX.button();
+      testingMode = false;
+      customPlayLevel = lvObj;
+      gameMode = 'easy';
+      score = 0;
+      lives = 5;
+      speedMultiplier = 1;
+      hideAllOverlays();
+      hud.classList.remove('hidden');
+      pauseBtn.classList.remove('hidden');
+      document.getElementById('back-editor-btn').classList.add('hidden');
+      document.getElementById('test-banner').classList.add('hidden');
       loadLevel(-1, lvObj);
       ensureAudio();
     },
     showTitle: backToTitle,
     showOverlay,
+    hideTestBanner() {
+      document.getElementById('test-banner').classList.add('hidden');
+      document.getElementById('back-editor-btn').classList.add('hidden');
+      testingMode = false;
+      customPlayLevel = null;
+    },
+    isTestingMode() { return testingMode; },
+    getCustomPlayLevel() { return customPlayLevel; },
+    getScore() { return score; },
     getMaterials() { return MATERIALS; },
     getMatEmoji() { return MAT_EMOJI; },
     getLevels() { return LEVELS; },

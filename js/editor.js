@@ -85,8 +85,47 @@
     return 'lv-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
   }
 
+  // ===== 遊玩統計 =====
+  function recordPlayStats(id, finalScore, won) {
+    if (!id) return;
+    const data = loadAll();
+    const lv = data.levels.find(l => l.id === id);
+    if (!lv) return;
+    lv.stats = lv.stats || { playCount: 0, highScore: 0, lastPlayed: 0 };
+    lv.stats.playCount++;
+    if (won && finalScore > (lv.stats.highScore || 0)) lv.stats.highScore = finalScore;
+    lv.stats.lastPlayed = Date.now();
+    saveAll(data);
+  }
+
+  // ===== 最近編輯 =====
+  function recordRecentEdit(id) {
+    if (!id) return;
+    try {
+      const arr = JSON.parse(localStorage.getItem('mfsb_recent_edits') || '[]');
+      const filtered = arr.filter(x => x !== id);
+      filtered.unshift(id);
+      localStorage.setItem('mfsb_recent_edits', JSON.stringify(filtered.slice(0, 5)));
+    } catch {}
+  }
+  function getRecentEdits() {
+    try {
+      return JSON.parse(localStorage.getItem('mfsb_recent_edits') || '[]');
+    } catch { return []; }
+  }
+
   // 對外暴露給 game.js
-  window.MFSB_EDITOR = { getEnabledCustomLevels };
+  window.MFSB_EDITOR = {
+    getEnabledCustomLevels,
+    recordPlayStats,
+    onCustomPlayEnd(won, finalScore) {
+      // 從我的關卡試玩過關 → 回我的關卡頁
+      setTimeout(() => {
+        if (window.MFSB) window.MFSB.showOverlay(mylevelsScreen);
+        renderMyLevels();
+      }, 800);
+    },
+  };
 
   // ===== DOM =====
   const editorScreen   = document.getElementById('editor-screen');
@@ -422,6 +461,7 @@
   const CELL_COLORS = {
     'B': '#ef5350','W': '#4fc3f7','F': '#e53935','S': '#ec407a','O': '#ffa726',
     'H': '#90a4ae','X': '#37474f','G': '#42a5f5','?': '#ab47bc','N': '#9575cd','Z': '#fdd835',
+    'M': '#9c27b0','K': '#ffb300','L': '#6d4c41',
   };
 
   function drawCellGlyph(ch, x, y, w, h) {
@@ -436,6 +476,7 @@
     const emoji = ({
       'B':'■','W':'💧','F':'🍉','S':'🍓','O':'🍊',
       'H':'🛡','X':'⛔','G':'💎','?':'?','N':'?','Z':'⚡',
+      'M':'↔','K':'🔑','L':'🔒',
     })[ch] || ch;
     ctx.fillText(emoji, x, y);
   }
@@ -686,14 +727,31 @@
   });
 
   function isValidMat(ch) {
-    return ch === '.' || 'BWFSOHXG?NZ'.includes(ch);
+    return ch === '.' || 'BWFSOHXG?NZMKL'.includes(ch);
   }
 
   // ===== 屬性面板事件 =====
+  const tagsInput = document.getElementById('ed-tags');
+  const timerInput = document.getElementById('ed-timer');
+  const timerVal = document.getElementById('ed-timer-val');
+  const startBallsInput = document.getElementById('ed-startballs');
+  const startBallsVal = document.getElementById('ed-startballs-val');
+
   nameInput.addEventListener('input', () => { ed.name = nameInput.value || '我的關卡'; });
   speedInput.addEventListener('input', () => {
     ed.speed = parseInt(speedInput.value, 10);
     speedVal.textContent = ed.speed;
+  });
+  if (tagsInput) tagsInput.addEventListener('input', () => {
+    ed.tags = (tagsInput.value || '').split(',').map(s => s.trim()).filter(Boolean);
+  });
+  if (timerInput) timerInput.addEventListener('input', () => {
+    ed.timer = parseInt(timerInput.value, 10);
+    timerVal.textContent = ed.timer === 0 ? '關閉' : (ed.timer + ' 秒');
+  });
+  if (startBallsInput) startBallsInput.addEventListener('input', () => {
+    ed.startBalls = parseInt(startBallsInput.value, 10);
+    startBallsVal.textContent = ed.startBalls;
   });
   rowsInput.addEventListener('input', () => {
     const newRows = parseInt(rowsInput.value, 10);
@@ -760,14 +818,125 @@
       alert('還沒有任何素材，先在格子上塗一些再分享');
       return;
     }
+    openShareDialog(lv);
+  }
+
+  // ===== 分享 dialog（多 pane） =====
+  let _activeShareLv = null;
+  let _activeSharePane = 'link';
+  function openShareDialog(lv) {
+    _activeShareLv = lv;
+    _activeSharePane = 'link';
+    syncSharePanes();
+    refreshSharePane();
+    if (window.MFSB) window.MFSB.showOverlay(document.getElementById('share-dialog'));
+  }
+  function syncSharePanes() {
+    document.querySelectorAll('.share-tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.tab === _activeSharePane);
+    });
+    document.querySelectorAll('.share-pane').forEach(p => {
+      p.classList.toggle('active', p.dataset.pane === _activeSharePane);
+    });
+    document.getElementById('share-download-btn').classList.toggle('hidden', _activeSharePane !== 'png');
+    document.getElementById('share-copy-btn').classList.toggle('hidden', _activeSharePane === 'png' || _activeSharePane === 'qr');
+  }
+  function refreshSharePane() {
+    if (!_activeShareLv) return;
+    const lv = _activeShareLv;
     const b64 = encodeLevel(lv);
     const url = location.origin + location.pathname + '#lv=' + b64;
-    openTextDialog(
-      '🔗 分享連結 (按複製)',
-      url + '\n\n──────────\n別人打開這個連結，會直接匯入「' + lv.name + '」到他的編輯器。\n\n📏 連結長度：' + url.length + ' 字',
-      null
-    );
+    if (_activeSharePane === 'link') {
+      document.getElementById('share-link-text').value = url;
+    } else if (_activeSharePane === 'qr') {
+      const box = document.getElementById('share-qr-box');
+      const enc = encodeURIComponent(url);
+      box.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${enc}" alt="QR" onerror="this.replaceWith(Object.assign(document.createElement('p'),{textContent:'⚠️ 離線無法產生 QR，請複製連結'}));" />`;
+    } else if (_activeSharePane === 'png') {
+      drawSharePNG(lv);
+    } else if (_activeSharePane === 'emoji') {
+      document.getElementById('share-emoji-text').value = gridToEmoji(lv);
+    }
   }
+  function gridToEmoji(lv) {
+    const map = {'B':'🟥','W':'💧','F':'🍉','S':'🍓','O':'🍊',
+                 'H':'🛡️','X':'⛔','G':'💎','?':'🎁','N':'🌑','Z':'⚡','.':'⬛'};
+    const lines = lv.grid.map(row => [...row].map(c => map[c] || '⬛').join(''));
+    return `🎮 ${lv.name}\n⚡ 球速 ${lv.speed} · ${lv.grid.length} 排\n\n` + lines.join('\n') +
+      `\n\n玩法：https://nicktim791113.github.io/Magic-fruit-splash-breaker/`;
+  }
+  function drawSharePNG(lv) {
+    const c = document.getElementById('share-png-canvas');
+    const tc = c.getContext('2d');
+    const W = 540, H = 540;
+    c.width = W; c.height = H;
+    // 背景
+    const bg = tc.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#fff3e0'); bg.addColorStop(1, '#ffccbc');
+    tc.fillStyle = bg; tc.fillRect(0, 0, W, H);
+    // 標題
+    tc.fillStyle = '#d84315';
+    tc.font = 'bold 26px "Comic Sans MS", "Microsoft JhengHei", sans-serif';
+    tc.textAlign = 'center';
+    tc.fillText('🎮 ' + lv.name, W/2, 38);
+    tc.fillStyle = '#5d4037';
+    tc.font = '14px sans-serif';
+    tc.fillText(`球速 ${lv.speed} · ${lv.grid.length} 排`, W/2, 60);
+    // 網格
+    const padX = 30, padTop = 84, padBottom = 56;
+    const gW = W - padX * 2;
+    const gH = H - padTop - padBottom;
+    const cellW = gW / COLS;
+    const cellH = Math.min(cellW * 0.62, gH / lv.grid.length);
+    const offY = padTop + (gH - cellH * lv.grid.length) / 2;
+    for (let r = 0; r < lv.grid.length; r++) {
+      for (let cc = 0; cc < COLS; cc++) {
+        const ch = lv.grid[r][cc];
+        if (ch === '.') continue;
+        const x = padX + cc * cellW;
+        const y = offY + r * cellH;
+        tc.fillStyle = (CELL_COLORS[ch]) || '#999';
+        tc.fillRect(x + 1, y + 1, cellW - 2, cellH - 2);
+      }
+    }
+    // 底部水印
+    tc.fillStyle = '#6d4c41';
+    tc.font = '11px sans-serif';
+    tc.textAlign = 'center';
+    tc.fillText('Magic Fruit Splash Breaker · 自製關卡', W/2, H - 26);
+    tc.fillText('nicktim791113.github.io/Magic-fruit-splash-breaker', W/2, H - 12);
+  }
+
+  // tab 切換
+  document.querySelectorAll('.share-tab').forEach(t => {
+    t.addEventListener('click', () => {
+      _activeSharePane = t.dataset.tab;
+      syncSharePanes();
+      refreshSharePane();
+    });
+  });
+  document.getElementById('share-copy-btn').addEventListener('click', () => {
+    let txt = '';
+    if (_activeSharePane === 'link') txt = document.getElementById('share-link-text').value;
+    else if (_activeSharePane === 'emoji') txt = document.getElementById('share-emoji-text').value;
+    if (!txt) return;
+    try {
+      navigator.clipboard.writeText(txt).then(() => alert('已複製'));
+    } catch {
+      const t = document.getElementById(_activeSharePane === 'link' ? 'share-link-text' : 'share-emoji-text');
+      t.select(); document.execCommand('copy'); alert('已複製');
+    }
+  });
+  document.getElementById('share-download-btn').addEventListener('click', () => {
+    const c = document.getElementById('share-png-canvas');
+    const link = document.createElement('a');
+    link.download = `${(_activeShareLv && _activeShareLv.name) || 'level'}.png`;
+    link.href = c.toDataURL('image/png');
+    link.click();
+  });
+  document.getElementById('share-close-btn').addEventListener('click', () => {
+    if (window.MFSB) window.MFSB.showOverlay(document.getElementById('editor-screen'));
+  });
   // 啟動時檢查 URL hash 自動匯入
   function checkUrlForShare() {
     const h = location.hash;
@@ -793,6 +962,9 @@
       speed: ed.speed,
       theme: ed.theme,
       grid: ed.grid.slice(),
+      tags: ed.tags || [],
+      timer: ed.timer || 0,
+      startBalls: ed.startBalls || 1,
       enabled: true,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -807,6 +979,7 @@
       if (exist) {
         Object.assign(exist, lv, { id: ed.editingId, createdAt: exist.createdAt });
         saveAll(data);
+        recordRecentEdit(ed.editingId);
         clearDraft();
         alert('已更新「' + lv.name + '」');
         return;
@@ -814,6 +987,7 @@
     }
     ed.editingId = lv.id;
     upsertLevel(lv);
+    recordRecentEdit(lv.id);
     clearDraft();
     alert('已存檔「' + lv.name + '」');
   }
@@ -843,6 +1017,9 @@
       ed.theme = lv.theme || 'warm';
       ed.grid = lv.grid.slice();
       ed.rows = ed.grid.length;
+      ed.tags = lv.tags || [];
+      ed.timer = lv.timer || 0;
+      ed.startBalls = lv.startBalls || 1;
     } else {
       // 新增空白關卡前，先檢查是否有草稿可救回
       const draft = loadDraft();
@@ -856,6 +1033,9 @@
           ed.theme = draft.theme || 'warm';
           ed.grid = draft.grid.slice();
           ed.rows = ed.grid.length;
+          ed.tags = draft.tags || [];
+          ed.timer = draft.timer || 0;
+          ed.startBalls = draft.startBalls || 1;
         } else {
           ed.editingId = null;
           ed.name = nextLevelName();
@@ -863,6 +1043,7 @@
           ed.theme = 'warm';
           ed.rows = 7;
           ed.grid = makeEmptyGrid(7);
+          ed.tags = []; ed.timer = 0; ed.startBalls = 1;
           clearDraft();
         }
       } else {
@@ -872,6 +1053,7 @@
         ed.theme = 'warm';
         ed.rows = 7;
         ed.grid = makeEmptyGrid(7);
+        ed.tags = []; ed.timer = 0; ed.startBalls = 1;
       }
     }
     ed.history.length = 0;
@@ -882,9 +1064,20 @@
     rowsInput.value = ed.rows;
     rowsVal.textContent = ed.rows;
     themeInput.value = ed.theme;
+    if (tagsInput) tagsInput.value = (ed.tags || []).join(', ');
+    if (timerInput) {
+      timerInput.value = ed.timer || 0;
+      timerVal.textContent = (ed.timer || 0) === 0 ? '關閉' : (ed.timer + ' 秒');
+    }
+    if (startBallsInput) {
+      startBallsInput.value = ed.startBalls || 1;
+      startBallsVal.textContent = ed.startBalls || 1;
+    }
     mirrorBtn.classList.toggle('active', ed.mirrorMode);
     if (window.MFSB) window.MFSB.showOverlay(editorScreen);
     requestAnimationFrame(render);
+    // 首次進入顯示教學
+    maybeShowFirstTutorial();
   }
 
   function nextLevelName() {
@@ -898,11 +1091,37 @@
     if (window.MFSB) window.MFSB.showOverlay(mylevelsScreen);
   }
 
+  // ===== 搜尋 / 排序 / 批次 狀態 =====
+  const ml = {
+    search: '',
+    sort: 'custom',
+    batchMode: false,
+    selected: new Set(),
+  };
+
+  function filterAndSort(arr) {
+    let list = arr.slice();
+    const kw = ml.search.trim().toLowerCase();
+    if (kw) list = list.filter(l => (l.name || '').toLowerCase().includes(kw));
+    const targetCountOf = lv => lv.grid.reduce((s, row) => s + [...row].filter(c => c !== '.' && c !== 'X').length, 0);
+    switch (ml.sort) {
+      case 'name':    list.sort((a, b) => (a.name || '').localeCompare(b.name || '')); break;
+      case 'newest':  list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)); break;
+      case 'updated': list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)); break;
+      case 'targets': list.sort((a, b) => targetCountOf(b) - targetCountOf(a)); break;
+      case 'speed':   list.sort((a, b) => (b.speed || 0) - (a.speed || 0)); break;
+      case 'played':  list.sort((a, b) => ((b.stats && b.stats.playCount) || 0) - ((a.stats && a.stats.playCount) || 0)); break;
+      default:        break;
+    }
+    return list;
+  }
+
   function renderMyLevels() {
     const list = document.getElementById('ml-list');
     const empty = document.getElementById('ml-empty');
     const arr = getAllCustomLevels();
     document.getElementById('ml-count').textContent = '(' + arr.length + ')';
+    const visible = filterAndSort(arr);
     if (!arr.length) {
       list.innerHTML = '';
       empty.classList.remove('hidden');
@@ -910,14 +1129,20 @@
     }
     empty.classList.add('hidden');
     list.innerHTML = '';
-    arr.forEach((lv, idx) => {
+    visible.forEach((lv) => {
       const card = document.createElement('div');
       card.className = 'ml-card' + ((lv.enabled === false) ? ' disabled' : '');
-      card.draggable = true;
+      card.draggable = (ml.sort === 'custom') && !ml.batchMode;
       card.dataset.id = lv.id;
       const targetCount = lv.grid.reduce((s, row) => s + [...row].filter(c => c !== '.').length, 0);
+      const stats = lv.stats || {};
+      const statTxt = stats.playCount
+        ? ` · 🎮${stats.playCount}` + (stats.highScore ? ` · 🏆${stats.highScore}` : '')
+        : '';
       card.innerHTML = `
+        <input type="checkbox" class="ml-checkbox ${ml.batchMode ? '' : 'hidden'}" />
         <div class="ml-handle" title="拖曳調整順序">☰</div>
+        <canvas class="ml-thumb" width="120" height="90"></canvas>
         <div class="ml-info">
           <div class="ml-name"></div>
           <div class="ml-meta"></div>
@@ -927,11 +1152,22 @@
           <button class="ml-action" data-act="edit"   title="編輯">✏️</button>
           <button class="ml-action" data-act="play"   title="試玩">▶</button>
           <button class="ml-action" data-act="copy"   title="複製">📋</button>
+          <button class="ml-action" data-act="share"  title="分享">🔗</button>
           <button class="ml-action danger" data-act="del" title="刪除">🗑</button>
         </div>`;
       card.querySelector('.ml-name').textContent = lv.name;
       card.querySelector('.ml-meta').textContent =
-        `${lv.grid.length} 排 · ${targetCount} 目標 · 速度 ${lv.speed}`;
+        `${lv.grid.length} 排 · ${targetCount} 目標 · 速度 ${lv.speed}${statTxt}`;
+      // 縮圖
+      drawThumbnail(card.querySelector('.ml-thumb'), lv);
+      // 批次 checkbox
+      const cb = card.querySelector('.ml-checkbox');
+      cb.checked = ml.selected.has(lv.id);
+      cb.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (cb.checked) ml.selected.add(lv.id); else ml.selected.delete(lv.id);
+        updateBatchBar();
+      });
       card.querySelector('.ml-toggle').addEventListener('click', () => {
         toggleEnabled(lv.id);
         renderMyLevels();
@@ -939,24 +1175,96 @@
       card.querySelectorAll('.ml-action').forEach(btn => {
         btn.addEventListener('click', () => onCardAction(lv, btn.dataset.act));
       });
-      attachDragHandlers(card, list);
+      if (card.draggable) attachDragHandlers(card, list);
       list.appendChild(card);
     });
+  }
+
+  // ===== 縮圖繪製（縮小版的關卡預覽） =====
+  function drawThumbnail(canvasEl, lv) {
+    const tctx = canvasEl.getContext('2d');
+    const W = canvasEl.width, H = canvasEl.height;
+    tctx.clearRect(0, 0, W, H);
+    tctx.fillStyle = '#fff8e1';
+    tctx.fillRect(0, 0, W, H);
+    const rows = lv.grid.length || 1;
+    const cellW = W / COLS;
+    const cellH = H / rows;
+    for (let r = 0; r < rows; r++) {
+      const row = lv.grid[r];
+      for (let c = 0; c < COLS; c++) {
+        const ch = row[c];
+        if (ch === '.') continue;
+        tctx.fillStyle = (CELL_COLORS && CELL_COLORS[ch]) || '#999';
+        tctx.fillRect(c * cellW + 0.5, r * cellH + 0.5, cellW - 1, cellH - 1);
+      }
+    }
   }
 
   function onCardAction(lv, act) {
     if (act === 'edit') openEditor(lv);
     else if (act === 'play') {
-      if (window.MFSB) window.MFSB.startTestPlay(lv);
+      // 從我的關卡按 ▶ 試玩：當作正式遊戲（記分數、會更新統計）
+      if (window.MFSB) window.MFSB.startCustomPlay(lv);
     } else if (act === 'copy') {
       duplicateLevel(lv.id);
       renderMyLevels();
+    } else if (act === 'share') {
+      openShareDialog(lv);
     } else if (act === 'del') {
       if (confirm('刪除「' + lv.name + '」？此動作無法復原。')) {
         deleteLevel(lv.id);
+        ml.selected.delete(lv.id);
         renderMyLevels();
       }
     }
+  }
+
+  // ===== 搜尋 / 排序 / 批次 事件 =====
+  document.getElementById('ml-search').addEventListener('input', (e) => {
+    ml.search = e.target.value;
+    renderMyLevels();
+  });
+  document.getElementById('ml-sort').addEventListener('change', (e) => {
+    ml.sort = e.target.value;
+    renderMyLevels();
+  });
+  document.getElementById('ml-batch-toggle').addEventListener('click', () => {
+    ml.batchMode = !ml.batchMode;
+    ml.selected.clear();
+    document.getElementById('ml-batch-bar').classList.toggle('hidden', !ml.batchMode);
+    renderMyLevels();
+    updateBatchBar();
+  });
+  function updateBatchBar() {
+    document.getElementById('ml-batch-count').textContent = `已選 ${ml.selected.size} 張`;
+  }
+  document.getElementById('ml-batch-enable').addEventListener('click', () => batchSetEnabled(true));
+  document.getElementById('ml-batch-disable').addEventListener('click', () => batchSetEnabled(false));
+  document.getElementById('ml-batch-export').addEventListener('click', () => batchExport());
+  document.getElementById('ml-batch-delete').addEventListener('click', () => batchDelete());
+  function batchSetEnabled(en) {
+    if (!ml.selected.size) { alert('沒有選擇任何關卡'); return; }
+    const data = loadAll();
+    data.levels.forEach(l => { if (ml.selected.has(l.id)) l.enabled = en; });
+    saveAll(data);
+    renderMyLevels();
+  }
+  function batchExport() {
+    if (!ml.selected.size) { alert('沒有選擇任何關卡'); return; }
+    const data = loadAll();
+    const subset = { version: 1, levels: data.levels.filter(l => ml.selected.has(l.id)) };
+    openTextDialog('📤 匯出 (複製 JSON)', JSON.stringify(subset, null, 2), null);
+  }
+  function batchDelete() {
+    if (!ml.selected.size) { alert('沒有選擇任何關卡'); return; }
+    if (!confirm(`真的刪除這 ${ml.selected.size} 張關卡？此動作無法復原。`)) return;
+    const data = loadAll();
+    data.levels = data.levels.filter(l => !ml.selected.has(l.id));
+    saveAll(data);
+    ml.selected.clear();
+    renderMyLevels();
+    updateBatchBar();
   }
 
   // ===== 拖曳排序 =====
@@ -1160,6 +1468,9 @@
     '?': { emoji: '🎁', name: '神秘', hp: 1, score: 20 },
     'N': { emoji: '🌑', name: '隱藏', hp: 2, score: 30 },
     'Z': { emoji: '⚡', name: '加速', hp: 1, score: 20 },
+    'M': { emoji: '🔁', name: '移動', hp: 1, score: 35 },
+    'K': { emoji: '🔑', name: '鑰匙', hp: 1, score: 60 },
+    'L': { emoji: '🔒', name: '鎖磚', hp: 1, score: 50 },
   };
   function updateStats() {
     if (!statTotal) return;
@@ -1262,6 +1573,110 @@
     if (e.key === 'i' || e.key === 'I') { setTool('pick'); }
     if (e.key === 'b' || e.key === 'B') { setTool(ed.tool === 'bucket' ? 'paint' : 'bucket'); }
   });
+
+  // ===== 暗色模式 =====
+  const darkBtn = document.getElementById('ed-dark-btn');
+  if (localStorage.getItem('mfsb_dark') === '1') document.body.classList.add('dark');
+  if (darkBtn) {
+    darkBtn.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+    darkBtn.addEventListener('click', () => {
+      const on = !document.body.classList.contains('dark');
+      document.body.classList.toggle('dark', on);
+      localStorage.setItem('mfsb_dark', on ? '1' : '0');
+      darkBtn.textContent = on ? '☀️' : '🌙';
+      render();
+    });
+  }
+
+  // ===== 首次教學 =====
+  const TUTORIAL_STEPS = [
+    {
+      title: '🎓 歡迎來到關卡設計器！',
+      body: `
+        <h4>👋 兩分鐘學會做關卡</h4>
+        <p>這是一個可愛的打磚塊關卡編輯器。你可以：</p>
+        <ul>
+          <li>自由排列 12 種素材（磚塊、水球、水果、寶石...）</li>
+          <li>調整球速、排數、背景主題</li>
+          <li>存檔到瀏覽器、分享連結給朋友</li>
+          <li>啟用後接在正式 10 關後面玩</li>
+        </ul>
+        <p>按「下一步」我帶你走一遍。</p>
+      `,
+    },
+    {
+      title: '🎨 第 1 步：選素材',
+      body: `
+        <h4>左欄「素材調色盤」</h4>
+        <p>點下任一個素材按鈕，把它設為當前的「筆刷」。</p>
+        <ul>
+          <li>🟥 磚塊：1 下破，分 10</li>
+          <li>💧 水球：水花動畫，分 15</li>
+          <li>🍉🍓🍊 水果：2 下破，分 25</li>
+          <li>🛡️ 鋼磚（3 下） / ⛔ 不可破 / 💎 寶石 +100</li>
+          <li>🎁 神秘箱破時掉道具（變寬/慢速/多球）</li>
+        </ul>
+        <p>進階：鍵盤 <b>1-9 0 N Z</b> 直接切素材。</p>
+      `,
+    },
+    {
+      title: '✏️ 第 2 步：開始畫',
+      body: `
+        <h4>選好素材後在畫布塗</h4>
+        <ul>
+          <li>✏️ 塗繪：點/拖過格子</li>
+          <li>▭ 框選：拖出範圍，一次填滿</li>
+          <li>🎯 滴管：點現有格子，吸取那個素材</li>
+          <li>🎨 油漆桶：點空格，連通空格全填滿</li>
+          <li>🪞 鏡像：開了之後塗左邊會自動填右邊（做愛心/笑臉必備）</li>
+          <li>↩ 撤銷 / ↪ 重做：Ctrl+Z / Ctrl+Y</li>
+        </ul>
+      `,
+    },
+    {
+      title: '💾 第 3 步：存檔分享',
+      body: `
+        <h4>右側統計即時顯示</h4>
+        <p>左欄底部統計區會即時告訴你：總目標數、各素材計數、難度估算 ⭐。</p>
+        <h4>動作按鈕</h4>
+        <ul>
+          <li>💾 存檔：寫入瀏覽器本機</li>
+          <li>▶ 試玩：立刻玩這張，回編輯器繼續改</li>
+          <li>📤 匯出：複製 JSON</li>
+          <li>🔗 分享：產生短連結、QR、PNG 圖、Emoji 字串</li>
+        </ul>
+        <p>右上 ❓ 隨時看完整說明。<b>祝你玩得愉快！</b></p>
+      `,
+    },
+  ];
+  let _tutStep = 0;
+  function showTutorial(step) {
+    _tutStep = step;
+    const s = TUTORIAL_STEPS[step];
+    document.getElementById('tut-title').textContent = s.title;
+    document.getElementById('tut-body').innerHTML = s.body;
+    document.querySelectorAll('.tut-dot').forEach((d, i) => {
+      d.classList.toggle('active', i === step);
+    });
+    document.getElementById('tut-prev').style.visibility = step === 0 ? 'hidden' : 'visible';
+    document.getElementById('tut-next').textContent = (step === TUTORIAL_STEPS.length - 1) ? '✓ 完成' : '下一步 →';
+    if (window.MFSB) window.MFSB.showOverlay(document.getElementById('tutorial-dialog'));
+  }
+  document.getElementById('tut-prev').addEventListener('click', () => showTutorial(Math.max(0, _tutStep - 1)));
+  document.getElementById('tut-next').addEventListener('click', () => {
+    if (_tutStep === TUTORIAL_STEPS.length - 1) closeTutorial();
+    else showTutorial(_tutStep + 1);
+  });
+  document.getElementById('tut-skip').addEventListener('click', closeTutorial);
+  function closeTutorial() {
+    localStorage.setItem('mfsb_tutorial_done', '1');
+    if (window.MFSB) window.MFSB.showOverlay(document.getElementById('editor-screen'));
+  }
+  function maybeShowFirstTutorial() {
+    if (localStorage.getItem('mfsb_tutorial_done') === '1') return false;
+    setTimeout(() => showTutorial(0), 200);
+    return true;
+  }
 
   // ===== 試玩結束的 callback =====
   window.MFSB_EDITOR.onTestPlayEnd = (won, finalScore) => {
