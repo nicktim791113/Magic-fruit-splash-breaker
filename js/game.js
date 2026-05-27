@@ -483,10 +483,43 @@
     state = STATE.READY;
   }
 
+  // 連續射擊：每次按發射就消耗 1 顆儲備球
+  //   ball.stuck === true 視為「無球在場、等待第一發」狀態
+  //   點一下：把 ball 變成飛行球
+  //   再點一下（球已在場）：spawn 一顆 extraBall
+  //   每次發射扣 lives 1
   function launchBall() {
-    if (!ball.stuck) return;
-    ball.stuck = false;
-    state = STATE.PLAYING;
+    if (lives <= 0) return false;
+    // 第一次發射（場上沒球）
+    if (ball.stuck) {
+      ball.stuck = false;
+      const speed = ball.speed || (currentLevel && currentLevel.speed) || 400;
+      const angle = -Math.PI / 2 + rand(-0.3, 0.3);
+      ball.x = paddle.x + paddle.w / 2;
+      ball.y = paddle.y - ball.r - 4;
+      ball.vx = Math.cos(angle) * speed;
+      ball.vy = Math.sin(angle) * speed;
+      ball.speed = speed;
+      lives -= 1;
+      state = STATE.PLAYING;
+      updateHUD();
+      return true;
+    }
+    // 連發：spawn extraBall（從擋板位置）
+    const speed = ball.speed || 400;
+    const angle = -Math.PI / 2 + rand(-0.35, 0.35);
+    extraBalls.push({
+      x: paddle.x + paddle.w / 2,
+      y: paddle.y - ball.r - 4,
+      r: ball.r,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      speed,
+    });
+    lives -= 1;
+    updateHUD();
+    SFX.paddle();
+    return true;
   }
 
   // ===== 更新 =====
@@ -829,22 +862,22 @@
     SFX.miss();
     addParticles(ball.x, H - 20, '#90caf9', 20, { speed: 220, life: 0.6, r: 4 });
     if (gameMode === 'easy') {
-      // 無限重生
+      // 輕鬆模式：球永遠不會用完，回等待狀態
+      lives = 999;
+      resetBallWaiting();
       addText(W / 2, H - 240, '球回來啦！', '#1976d2');
-      resetBall();
     } else {
-      lives -= 1;
+      // 挑戰模式：lives 是儲備球數，球落地不再扣（發射時才扣）
       updateHUD();
       if (lives <= 0) {
+        // 沒儲備球了 → game over
         state = STATE.GAMEOVER;
-        // 試玩模式：失敗直接回編輯器
         if (levelIndex === -1 && testingMode && window.MFSB_EDITOR && window.MFSB_EDITOR.onTestPlayEnd) {
           window.MFSB_EDITOR.onTestPlayEnd(false, score);
           document.getElementById('test-banner').classList.add('hidden');
           document.getElementById('back-editor-btn').classList.add('hidden');
           return;
         }
-        // 自製關卡失敗也記統計
         if (levelIndex === -1 && customPlayLevel && window.MFSB_EDITOR && window.MFSB_EDITOR.recordPlayStats) {
           window.MFSB_EDITOR.recordPlayStats(customPlayLevel.id, score, false);
         }
@@ -853,15 +886,28 @@
         SFX.gameOver();
         return;
       }
-      addText(W / 2, H - 240, '小心！剩 ' + lives + ' 顆 ❤️', '#c62828');
-      resetBall();
+      // 還有儲備 → 等下一發
+      resetBallWaiting();
+      addText(W / 2, H - 240, '⚪×' + lives + ' 點螢幕再射', '#c62828');
     }
+  }
+
+  function resetBallWaiting() {
+    ball.stuck = true;
+    ball.x = paddle.x + paddle.w / 2;
+    ball.y = paddle.y - ball.r - 4;
+    ball.vx = 0; ball.vy = 0;
+    state = STATE.READY;
   }
 
   function onLevelClear() {
     state = STATE.CLEARED;
     SFX.clear();
     spawnFireworks();
+    // 過關獎金：分數入袋（試玩模式不計）
+    if (!testingMode && window.MFSB_SHOP) {
+      window.MFSB_SHOP.addMoney(score);
+    }
     setTimeout(() => {
       // 試玩單張關卡：levelIndex === -1
       if (levelIndex === -1) {
@@ -954,34 +1000,41 @@
   }
 
   function applyPowerup(p) {
-    const v = POWERUP_VISUAL[p.type];
+    applyPowerupByType(p.type, true);
+  }
+  function applyPowerupByType(type, fromPickup) {
+    const v = (typeof POWERUP_VISUAL !== 'undefined' && POWERUP_VISUAL[type])
+      || { emoji: '🎁', label: '道具', color: '#ab47bc' };
     SFX.clear();
     addText(W / 2, paddle.y - 40, `${v.emoji} ${v.label}`, v.color);
-    if (p.type === 'wide') {
+    if (type === 'wide') {
       fx.paddleWideT = 10;
       paddle.w = PADDLE_W_BASE * 1.5;
-    } else if (p.type === 'slow') {
+    } else if (type === 'slow') {
       fx.slowT = 8;
-      // 把所有球速縮短到 0.7×（只調當下速度，下次擋板碰撞會用 ball.speed 計）
-      const apply = b => { b.vx *= 0.7; b.vy *= 0.7; b.speed *= 0.7; };
+      const apply = b => { if (b.vx || b.vy) { b.vx *= 0.7; b.vy *= 0.7; } b.speed *= 0.7; };
       apply(ball); for (const b of extraBalls) apply(b);
-    } else if (p.type === 'multi') {
-      // 從主球的位置 spawn 兩顆額外球，左右兩個角度
+    } else if (type === 'multi') {
       const baseSpeed = ball.speed || 400;
+      const sx = ball.stuck ? (paddle.x + paddle.w / 2) : ball.x;
+      const sy = ball.stuck ? (paddle.y - ball.r - 4) : ball.y;
       for (let i = 0; i < 2; i++) {
         const angle = -Math.PI / 2 + (i === 0 ? -0.6 : 0.6);
         extraBalls.push({
-          x: ball.x, y: ball.y, r: ball.r,
+          x: sx, y: sy, r: ball.r,
           vx: Math.cos(angle) * baseSpeed,
           vy: Math.sin(angle) * baseSpeed,
           speed: baseSpeed,
         });
       }
-    } else if (p.type === 'double') {
+    } else if (type === 'double') {
       fx.doubleT = 10;
-    } else if (p.type === 'gem') {
+    } else if (type === 'gem') {
       score += 50;
       addText(paddle.x + paddle.w / 2, paddle.y - 30, '+50', '#1976d2');
+    } else if (type === 'extraBall') {
+      lives += 1;
+      addText(paddle.x + paddle.w / 2, paddle.y - 30, '+1 ⭕', '#1976d2');
     }
     updateHUD();
   }
@@ -1068,7 +1121,10 @@
       ctx.fillStyle = 'rgba(93, 64, 55, 0.85)';
       ctx.font = 'bold 22px "Comic Sans MS", "Microsoft JhengHei", sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('👇 點一下螢幕發射！', W / 2, H - 110);
+      const ballsLeft = (gameMode === 'easy') ? '∞' : ('⚪×' + lives);
+      ctx.fillText('👇 點螢幕發射 (連點可連射)', W / 2, H - 110);
+      ctx.font = 'bold 18px sans-serif';
+      ctx.fillText('儲備：' + ballsLeft, W / 2, H - 82);
     }
   }
 
@@ -1498,10 +1554,13 @@
     scoreBadge.textContent = `分數 ${score}`;
     if (gameMode === 'challenge') {
       livesBadge.classList.remove('hidden');
-      livesBadge.textContent = '❤️'.repeat(lives) || '—';
+      const shown = Math.min(lives, 12);
+      livesBadge.textContent = '⚪'.repeat(shown) + (lives > 12 ? `+${lives - 12}` : '') || '—';
     } else {
       livesBadge.classList.add('hidden');
     }
+    // 同步金錢與庫存
+    if (window.MFSB_SHOP && window.MFSB_SHOP.syncHUD) window.MFSB_SHOP.syncHUD();
   }
 
   function hideAllOverlays() {
@@ -1512,7 +1571,8 @@
      document.getElementById('template-screen'),
      document.getElementById('text-dialog'),
      document.getElementById('share-dialog'),
-     document.getElementById('tutorial-dialog')]
+     document.getElementById('tutorial-dialog'),
+     document.getElementById('shop-screen')]
       .forEach(o => o && o.classList.add('hidden'));
   }
   function showOverlay(el) {
@@ -1520,12 +1580,17 @@
     el.classList.remove('hidden');
   }
 
+  // 依模式設定 lives：輕鬆=999（視為無限）、挑戰=5（儲備球）
+  function initLivesByMode(mode) {
+    lives = (mode === 'easy') ? 999 : 5;
+  }
+
   function startGame(mode) {
     SFX.button();
     gameMode = mode;
     score = 0;
-    lives = 5;
-    speedMultiplier = 1; // 正常模式回到 1×
+    initLivesByMode(mode);
+    speedMultiplier = 1;
     hideAllOverlays();
     hud.classList.remove('hidden');
     pauseBtn.classList.remove('hidden');
@@ -1537,7 +1602,7 @@
     SFX.button();
     gameMode = mode;
     score = 0;
-    lives = 5;
+    initLivesByMode(mode);
     speedMultiplier = speedMul;
     hideAllOverlays();
     hud.classList.remove('hidden');
@@ -1549,13 +1614,14 @@
   function goToNextLevel() {
     SFX.button();
     hideAllOverlays();
+    // 進下一關前先給商店掛勾（過關獎金已在 onLevelClear 中累加）
     loadLevel(levelIndex + 1);
   }
 
   function retryFromGameOver() {
     SFX.button();
     score = 0;
-    lives = 5;
+    initLivesByMode(gameMode);
     hideAllOverlays();
     loadLevel(0);
   }
@@ -1565,6 +1631,8 @@
     state = STATE.TITLE;
     hud.classList.add('hidden');
     pauseBtn.classList.add('hidden');
+    const ib = document.getElementById('inventory-bar');
+    if (ib) ib.classList.add('hidden');
     showOverlay(titleScreen);
   }
 
@@ -1618,7 +1686,7 @@
     startGameDev(devMode, devLevel, devSpeed);
   });
   document.getElementById('next-level-btn').addEventListener('click', goToNextLevel);
-  document.getElementById('play-again-btn').addEventListener('click', () => { score = 0; lives = 5; loadLevel(0); hideAllOverlays(); });
+  document.getElementById('play-again-btn').addEventListener('click', () => { score = 0; initLivesByMode(gameMode); loadLevel(0); hideAllOverlays(); });
   document.getElementById('retry-btn').addEventListener('click', retryFromGameOver);
   document.getElementById('back-title-btn').addEventListener('click', backToTitle);
   document.getElementById('resume-btn').addEventListener('click', togglePause);
@@ -1652,8 +1720,12 @@
   // ===== 指針輸入（觸控/滑鼠） =====
   function canvasPointFromEvent(e) {
     const rect = canvas.getBoundingClientRect();
-    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-    return cx * (W / rect.width);
+    const ex = e.touches ? e.touches[0].clientX : e.clientX;
+    const ey = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+      x: (ex - rect.left) * (W / rect.width),
+      y: (ey - rect.top)  * (H / rect.height),
+    };
   }
 
   function onPointerDown(e) {
@@ -1661,17 +1733,24 @@
         state === STATE.GAMEOVER || state === STATE.VICTORY ||
         state === STATE.CLEARED) return;
     e.preventDefault();
+    const p = canvasPointFromEvent(e);
     pointerActive = true;
-    pointerX = canvasPointFromEvent(e);
-    // 容錯：當在 ready 狀態，點下去就發射
-    if (state === STATE.READY) launchBall();
+    pointerX = p.x;
+    // 連射規則：
+    //   READY 狀態任何位置點都發射
+    //   PLAYING 狀態只有「擋板上方 60px 以外」算發射，貼擋板拖視為移動
+    if (state === STATE.READY) {
+      launchBall();
+    } else if (state === STATE.PLAYING && p.y < paddle.y - 60 && lives > 0) {
+      launchBall();
+    }
     ensureAudio();
   }
 
   function onPointerMove(e) {
     if (!pointerActive) return;
     e.preventDefault();
-    pointerX = canvasPointFromEvent(e);
+    pointerX = canvasPointFromEvent(e).x;
   }
 
   function onPointerUp() { pointerActive = false; }
@@ -1759,7 +1838,7 @@
       customPlayLevel = null;
       gameMode = 'easy';
       score = 0;
-      lives = 5;
+      lives = 999;
       speedMultiplier = 1;
       hideAllOverlays();
       hud.classList.remove('hidden');
@@ -1776,7 +1855,7 @@
       customPlayLevel = lvObj;
       gameMode = 'easy';
       score = 0;
-      lives = 5;
+      lives = 999;
       speedMultiplier = 1;
       hideAllOverlays();
       hud.classList.remove('hidden');
@@ -1788,6 +1867,7 @@
     },
     showTitle: backToTitle,
     showOverlay,
+    applyPowerupByType,
     hideTestBanner() {
       document.getElementById('test-banner').classList.add('hidden');
       document.getElementById('back-editor-btn').classList.add('hidden');

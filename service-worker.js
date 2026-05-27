@@ -1,6 +1,6 @@
 /* === Magic Fruit Splash Breaker - Service Worker === */
 /* 改版時記得把 CACHE_VERSION 升號，強制更新快取。 */
-const CACHE_VERSION = 'mfsb-v2.0.1';
+const CACHE_VERSION = 'mfsb-v2.1.0';
 const PRECACHE = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const PRECACHE = [
   './manifest.json',
   './js/game.js',
   './js/editor.js',
+  './js/shop.js',
   './assets/icons/icon.svg',
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png',

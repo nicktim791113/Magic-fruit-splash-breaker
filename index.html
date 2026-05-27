@@ -23,10 +23,14 @@
         <span id="score-badge" class="badge">分數 0</span>
       </div>
       <div class="hud-right">
-        <span id="lives-badge" class="badge lives">❤️❤️❤️❤️❤️</span>
+        <span id="lives-badge" class="badge lives">⚪⚪⚪⚪⚪</span>
+        <span id="hud-money" class="badge money">💰0</span>
         <button id="mute-btn" class="icon-btn" aria-label="切換音效">🔊</button>
       </div>
     </header>
+
+    <!-- 庫存按鈕列（遊戲中顯示，點即用） -->
+    <div id="inventory-bar" class="inventory-bar hidden"></div>
 
     <!-- 主畫面 / 遊戲畫布 -->
     <main id="stage">
@@ -49,7 +53,10 @@
           </button>
         </div>
         <p class="hint">提示：手機用手指拖曳，電腦用滑鼠或 ← → 鍵</p>
-        <button id="dev-mode-btn" class="dev-link">⚙️ 開發者模式</button>
+        <div class="title-extras">
+          <button id="home-shop-btn" class="dev-link shop-link">🛒 商店</button>
+          <button id="dev-mode-btn" class="dev-link">⚙️ 開發者模式</button>
+        </div>
       </section>
 
       <!-- 開發者模式畫面 -->
@@ -435,6 +442,7 @@
         <h2 class="big-text">🎉 過關！</h2>
         <p id="clear-info" class="subtitle"></p>
         <button id="next-level-btn" class="big-btn confirm">下一關 →</button>
+        <button id="shop-from-clear-btn" class="big-btn shop-link">🛒 進商店</button>
       </section>
 
       <!-- 全破畫面 -->
@@ -466,6 +474,18 @@
         <button id="test-banner-quit" class="ghost-btn small">回編輯器</button>
       </div>
 
+      <!-- 商店畫面 -->
+      <section id="shop-screen" class="overlay hidden shop-overlay">
+        <header class="ed-header">
+          <button id="shop-close-btn" class="ghost-btn small">⬅ 返回</button>
+          <h2 class="ed-title">🛒 道具商店</h2>
+          <span id="shop-money" class="shop-money-badge">💰 0</span>
+        </header>
+        <p class="ml-hint">通關後的分數會自動入袋，買道具給下一關使用</p>
+        <div id="shop-hint" class="shop-hint hidden"></div>
+        <div id="shop-list" class="shop-list"></div>
+      </section>
+
       <!-- 暫停按鈕（遊戲中） -->
       <button id="pause-btn" class="floating-btn hidden" aria-label="暫停">⏸</button>
     </main>
@@ -477,6 +497,7 @@
 
   <script src="./js/game.js"></script>
   <script src="./js/editor.js"></script>
+  <script src="./js/shop.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

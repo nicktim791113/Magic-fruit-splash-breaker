@@ -67,6 +67,48 @@ body.dark { background-color: #1c2833; }
 }
 
 .badge.lives { background: rgba(255, 235, 238, 0.95); }
+.badge.money { background: rgba(255, 248, 225, 0.95); color: #f57c00; }
+
+/* 庫存按鈕列 */
+.inventory-bar {
+  position: absolute;
+  top: 60px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 6;
+}
+.inv-btn {
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+  border: 3px solid #ff8f00;
+  background: linear-gradient(180deg, #ffe082, #ffb74d);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.18);
+  padding: 0;
+  font-family: inherit;
+}
+.inv-btn:active { transform: scale(0.92); }
+.inv-emoji { font-size: 22px; line-height: 1; }
+.inv-count { font-size: 11px; font-weight: 700; color: #5d4037; }
+
+.title-extras {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.dev-link.shop-link {
+  border-color: rgba(255, 152, 0, 0.6);
+  color: #ef6c00;
+}
+.big-btn.shop-link { background: linear-gradient(180deg, #ffb74d, #ef6c00); }
 
 .icon-btn {
   width: 44px;
@@ -808,6 +850,63 @@ body.dark { background-color: #1c2833; }
   font-size: 12px;
   color: #607d8b;
   margin-top: 2px;
+}
+
+/* === 商店畫面 === */
+.shop-overlay {
+  background: linear-gradient(180deg, rgba(255, 248, 225, 0.97) 0%, rgba(255, 224, 178, 0.97) 100%);
+  justify-content: flex-start;
+  padding: 12px;
+  gap: 10px;
+  overflow-y: auto;
+}
+.shop-money-badge {
+  background: linear-gradient(180deg, #ffd54f, #f57c00);
+  color: #fff;
+  font-weight: 700;
+  font-size: 16px;
+  padding: 6px 14px;
+  border-radius: 18px;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.15);
+}
+.shop-list {
+  width: min(640px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.shop-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 2px solid #ffcc80;
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+.shop-item.disabled { opacity: 0.6; }
+.shop-icon { font-size: 38px; line-height: 1; flex-shrink: 0; }
+.shop-info { flex: 1; min-width: 0; }
+.shop-name { font-weight: 700; color: #d84315; font-size: 16px; }
+.shop-own { color: #6d4c41; font-size: 13px; font-weight: 500; margin-left: 4px; }
+.shop-desc { font-size: 12px; color: #6d4c41; margin-top: 2px; line-height: 1.4; }
+.shop-buy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.shop-price { font-weight: 700; color: #ef6c00; font-size: 14px; }
+.shop-buy-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.shop-hint {
+  background: #4caf50;
+  color: #fff;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.18);
 }
 
 /* === 試玩橫幅（避開瀏海） === */
