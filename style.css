@@ -7,6 +7,8 @@ html, body {
   height: 100%;
   width: 100%;
   overflow: hidden;
+  /* 瀏海安全區的 fallback 底色（避免 iOS 露出黑色） */
+  background-color: #ffe0b2;
   background: linear-gradient(180deg, #ffe0b2 0%, #ffccbc 60%, #b3e5fc 100%);
   font-family: "Comic Sans MS", "Microsoft JhengHei", "Apple LiGothic", "PingFang TC", "Helvetica Neue", sans-serif;
   color: #4e342e;
@@ -24,14 +26,23 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  /* iOS / Android 安全區：避開瀏海、底部 Home Bar、側邊圓角 */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  box-sizing: border-box;
 }
+
+/* 暗色模式時瀏海區域也要黑 */
+body.dark { background-color: #1c2833; }
 
 /* === HUD === */
 .hud {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: max(env(safe-area-inset-top), 8px) 12px 8px;
+  padding: 8px 12px 8px;
   gap: 8px;
   z-index: 5;
   position: relative;
@@ -402,6 +413,7 @@ html, body {
   top: 0; right: 0;
   width: min(440px, 100%);
   height: 100vh;
+  height: 100dvh;
   background: #fff;
   border-left: 3px solid #cfd8dc;
   box-shadow: -6px 0 18px rgba(0,0,0,0.18);
@@ -410,6 +422,11 @@ html, body {
   flex-direction: column;
   transform: translateX(0);
   transition: transform 0.25s ease-out;
+  /* 安全區留邊（瀏海/底部Home Bar） */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-right: env(safe-area-inset-right);
+  box-sizing: border-box;
 }
 .ed-help-drawer.hidden {
   transform: translateX(100%);
@@ -793,7 +810,7 @@ html, body {
   margin-top: 2px;
 }
 
-/* === 試玩橫幅 === */
+/* === 試玩橫幅（避開瀏海） === */
 .test-banner {
   position: fixed;
   top: 0; left: 0; right: 0;
@@ -802,6 +819,9 @@ html, body {
   font-weight: 700;
   font-size: 14px;
   padding: 8px 12px;
+  padding-top: max(8px, calc(env(safe-area-inset-top) + 6px));
+  padding-left: max(12px, env(safe-area-inset-left));
+  padding-right: max(12px, env(safe-area-inset-right));
   text-align: center;
   z-index: 100;
   display: flex;
@@ -959,7 +979,7 @@ body.dark .ed-help-body b { color: #ffab40; }
 /* === Footer === */
 #footer {
   text-align: center;
-  padding: 6px 8px max(env(safe-area-inset-bottom), 6px);
+  padding: 6px 8px 6px;
   font-size: 12px;
   color: #6d4c41;
   opacity: 0.75;
