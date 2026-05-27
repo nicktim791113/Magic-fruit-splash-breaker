@@ -1145,7 +1145,7 @@
     ctx.textAlign = 'right';
     let rightTxt;
     if (gameMode === 'challenge') {
-      rightTxt = `❤️×${lives}  ${score}`;
+      rightTxt = `⚪×${lives}  ${score}`;
     } else {
       rightTxt = `分數 ${score}`;
     }
