@@ -68,6 +68,64 @@ body.dark { background-color: #1c2833; }
 
 .badge.lives { background: rgba(255, 235, 238, 0.95); }
 .badge.money { background: rgba(255, 248, 225, 0.95); color: #f57c00; }
+.badge.equipped {
+  background: linear-gradient(180deg, #ce93d8, #6a1b9a);
+  color: #fff;
+  border-color: #fff;
+}
+.badge.equipped .badge-uses { opacity: 0.9; margin-left: 2px; }
+.inv-btn.inv-btn-active {
+  border-color: #4caf50;
+  background: linear-gradient(180deg, #aed581, #558b2f);
+  color: #fff;
+}
+.inv-btn.inv-btn-active .inv-count { color: #fff; }
+
+.shop-tabs {
+  display: flex;
+  gap: 4px;
+  width: min(640px, 100%);
+}
+.shop-tabs .shop-tab {
+  flex: 1;
+  padding: 8px;
+  border: 2px solid #ffcc80;
+  background: #fff;
+  border-radius: 10px;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  color: #6d4c41;
+  cursor: pointer;
+}
+.shop-tabs .shop-tab.active {
+  background: linear-gradient(180deg, #ffb74d, #ef6c00);
+  color: #fff;
+  border-color: #d84315;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.15);
+}
+
+.shop-equip-bar {
+  background: rgba(206, 147, 216, 0.2);
+  border: 2px dashed #ce93d8;
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+  color: #4a148c;
+}
+
+.shop-equipped-tag {
+  background: #4caf50;
+  color: #fff;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 4px;
+}
+.shop-equip-btn { background: rgba(76, 175, 80, 0.2); border-color: #4caf50; color: #2e7d32; }
 
 /* 庫存按鈕列 */
 .inventory-bar {

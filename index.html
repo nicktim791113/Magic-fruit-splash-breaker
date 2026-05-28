@@ -23,6 +23,7 @@
         <span id="score-badge" class="badge">分數 0</span>
       </div>
       <div class="hud-right">
+        <span id="equipped-badge" class="badge equipped hidden">🛡</span>
         <span id="lives-badge" class="badge lives">⚪⚪⚪⚪⚪</span>
         <span id="hud-money" class="badge money">💰0</span>
         <button id="mute-btn" class="icon-btn" aria-label="切換音效">🔊</button>
@@ -482,6 +483,11 @@
           <span id="shop-money" class="shop-money-badge">💰 0</span>
         </header>
         <p class="ml-hint">通關後的分數會自動入袋，買道具給下一關使用</p>
+        <div class="shop-tabs">
+          <button class="shop-tab active" data-tab="item">🎁 道具</button>
+          <button class="shop-tab" data-tab="ball">🔮 攻擊球</button>
+          <button class="shop-tab" data-tab="paddle">🛡 擋板裝備</button>
+        </div>
         <div id="shop-hint" class="shop-hint hidden"></div>
         <div id="shop-list" class="shop-list"></div>
       </section>

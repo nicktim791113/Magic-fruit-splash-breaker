@@ -264,6 +264,11 @@
 
   // 連擊狀態
   const combo = { count: 0, timer: 0, max: 0 };
+  // 擋板裝備運作時的狀態
+  let paddleLuckyCount = 0;      // 福袋擋板每碰 5 次
+  let lightFlashT = 0;            // 光擋板閃光殘留時間
+  // 攻擊球 → ball.effect 字串對應
+  const BALL_EFFECT_MAP = { ballFire:'fire', ballIce:'ice', ballWind:'wind', ballWood:'wood', ballIron:'iron' };
   // 計時挑戰
   let levelTimer = 0;   // > 0 表示這關有時間限制（秒）
   let levelTimeLeft = 0;
@@ -490,6 +495,10 @@
   //   每次發射扣 lives 1
   function launchBall() {
     if (lives <= 0) return false;
+    // 拿出下一發攻擊球效果（一次性，發完就清空）
+    const nextEffectId = (window.MFSB_SHOP && window.MFSB_SHOP.takeNextBallEffect)
+      ? window.MFSB_SHOP.takeNextBallEffect() : null;
+    const effect = nextEffectId ? BALL_EFFECT_MAP[nextEffectId] : null;
     // 第一次發射（場上沒球）
     if (ball.stuck) {
       ball.stuck = false;
@@ -500,6 +509,8 @@
       ball.vx = Math.cos(angle) * speed;
       ball.vy = Math.sin(angle) * speed;
       ball.speed = speed;
+      ball.effect = effect;
+      ball.effectUntil = effect === 'iron' ? Date.now() + 1500 : 0;
       lives -= 1;
       state = STATE.PLAYING;
       updateHUD();
@@ -515,6 +526,8 @@
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
       speed,
+      effect,
+      effectUntil: effect === 'iron' ? Date.now() + 1500 : 0,
     });
     lives -= 1;
     updateHUD();
@@ -559,6 +572,7 @@
     }
     if (fx.slowT > 0) fx.slowT -= dt;
     if (fx.doubleT > 0) fx.doubleT -= dt;
+    if (lightFlashT > 0) lightFlashT -= dt;
     // 連擊計時
     if (combo.timer > 0) {
       combo.timer -= dt;
@@ -630,6 +644,22 @@
 
   // 推進單顆球。回傳 true 表示這顆球已落地（呼叫端決定處理方式）
   function stepOneBall(b, dt, isPrimary) {
+    // 鐵球時效到期
+    if (b.effect === 'iron' && b.effectUntil && Date.now() > b.effectUntil) {
+      b.effect = null; b.effectUntil = 0;
+    }
+    // 磁吸擋板：球距擋板 100px 內水平吸向中心
+    if (window.MFSB_SHOP) {
+      const inv = window.MFSB_SHOP.getInventory();
+      if (inv.equippedPaddle === 'pgMagnet' && b.vy > 0) {
+        const distY = paddle.y - b.y;
+        if (distY > 0 && distY < 100) {
+          const targetX = paddle.x + paddle.w / 2;
+          const dx = targetX - b.x;
+          b.x += dx * 0.06 * (1 - distY / 100);
+        }
+      }
+    }
     b.x += b.vx * dt;
     b.y += b.vy * dt;
 
@@ -672,7 +702,7 @@
         b.y - b.r <= paddle.y + paddle.h &&
         b.x >= paddle.x - b.r && b.x <= paddle.x + paddle.w + b.r) {
       const hitPos = clamp((b.x - (paddle.x + paddle.w / 2)) / (paddle.w / 2), -1, 1);
-      const bounceAngle = hitPos * (Math.PI / 3);
+      let bounceAngle = hitPos * (Math.PI / 3);
       const speed = Math.hypot(b.vx, b.vy) || b.speed;
       const newSpeed = Math.max(speed, b.speed);
       b.vx = Math.sin(bounceAngle) * newSpeed;
@@ -680,6 +710,8 @@
       b.y = paddle.y - b.r - 0.5;
       const minVy = newSpeed * 0.42;
       if (Math.abs(b.vy) < minVy) b.vy = -minVy;
+      // 套用擋板裝備效果
+      applyPaddleGearOnHit(b, newSpeed);
       SFX.paddle();
       addParticles(b.x, paddle.y, '#fff59d', 6, { speed: 140, life: 0.35, r: 3, gravity: 200 });
     }
@@ -688,12 +720,57 @@
     for (const tg of targets) {
       if (tg.dead) continue;
       if (collideCircleRect(b, tg)) {
+        // 鐵球穿透：不反彈、不結束碰撞，繼續傷害下一個
+        if (b.effect === 'iron') {
+          damageTarget(tg, b);
+          // 鐵球若碰到鋼磚（多 hp）或不可破，damageTarget 內會清除 effect
+          continue;
+        }
         resolveCollision(b, tg);
-        damageTarget(tg);
+        damageTarget(tg, b);
         break;
       }
     }
     return false;
+  }
+
+  // 擋板裝備效果
+  function applyPaddleGearOnHit(b, newSpeed) {
+    if (!window.MFSB_SHOP) return;
+    const inv = window.MFSB_SHOP.getInventory();
+    const eq = inv.equippedPaddle;
+    if (!eq) return;
+    if (eq === 'pgLightning') {
+      // 30% 機率讓球變電球
+      if (Math.random() < 0.3) {
+        b.effect = 'electric';
+        b.effectUntil = Date.now() + 5000;
+        addText(b.x, paddle.y - 24, '⚡ 電球!', '#ffd54f');
+      }
+    } else if (eq === 'pgLight') {
+      // 全螢幕閃光 + 揭曉所有 hidden
+      lightFlashT = 0.3;
+      let revealed = 0;
+      for (const t of targets) {
+        if (t.type === 'hidden' && t.hidden) { t.hidden = false; revealed++; }
+      }
+      if (revealed > 0) addText(W/2, paddle.y - 30, `🔆 揭曉 ${revealed} 個!`, '#f57f17');
+    } else if (eq === 'pgVortex') {
+      // 強制 vy 至少 70% 球速
+      const minVyForVortex = newSpeed * 0.7;
+      if (Math.abs(b.vy) < minVyForVortex) {
+        b.vy = -minVyForVortex;
+        const remainSq = newSpeed * newSpeed - b.vy * b.vy;
+        b.vx = Math.sign(b.vx || 1) * Math.sqrt(Math.max(0, remainSq));
+      }
+    } else if (eq === 'pgLucky') {
+      paddleLuckyCount++;
+      if (paddleLuckyCount >= 5) {
+        paddleLuckyCount = 0;
+        b.effect = 'lucky';
+        addText(b.x, paddle.y - 24, '🎁 福袋球!', '#7b1fa2');
+      }
+    }
   }
 
   // 圓-矩形碰撞
@@ -737,9 +814,12 @@
     }
   }
 
-  function damageTarget(tg) {
-    // 不可破：純反彈、無傷害
+  function damageTarget(tg, attackBall) {
+    const ab = attackBall || ball;
+    const eff = ab && ab.effect;
+    // 不可破：純反彈、無傷害（鐵球穿透中止）
     if (tg.type === 'indestructible') {
+      if (eff === 'iron') { ab.effect = null; ab.effectUntil = 0; }
       SFX.wall();
       return;
     }
@@ -749,7 +829,39 @@
       addText(tg.x + tg.w / 2, tg.y + tg.h / 2 - 12, '🔒 上鎖中', '#5d4037');
       return;
     }
-    // 隱藏磚：第一次碰到「揭曉」，不算扣血
+    // ===== 冰球：未凍結時凍結、已凍結時直接破 =====
+    if (eff === 'ice') {
+      const now = Date.now();
+      if (tg.frozenUntil && now < tg.frozenUntil) {
+        tg.hp = 0; tg.dead = true; tg.fadeT = 0.3;
+        addParticles(tg.x + tg.w/2, tg.y + tg.h/2, '#b3e5fc', 18, { speed: 280, life: 0.6, r: 4 });
+        onTargetBroken(tg);
+        return;
+      }
+      tg.frozenUntil = now + 3000;
+      SFX.fruitCrack();
+      addParticles(tg.x + tg.w/2, tg.y + tg.h/2, '#81d4fa', 14, { speed: 200, life: 0.5, r: 3 });
+      addText(tg.x + tg.w/2, tg.y + tg.h/2 - 10, '❄️ 凍結', '#0277bd');
+      return;
+    }
+    // ===== 火球：點燃 3×3 範圍 =====
+    if (eff === 'fire') {
+      addText(tg.x + tg.w/2, tg.y + tg.h/2 - 10, '🔥 燃燒', '#d84315');
+      igniteNearby(tg);
+      // 同時對自己造成傷害（繼續往下）
+    }
+    // ===== 風球：旋轉場上其他球角度 =====
+    if (eff === 'wind') {
+      windPush(tg);
+    }
+    // ===== 木球：球速減半 1.5 秒 =====
+    if (eff === 'wood') {
+      if (!ab.woodSlowedUntil || Date.now() > ab.woodSlowedUntil) {
+        ab.vx *= 0.5; ab.vy *= 0.5;
+        ab.woodSlowedUntil = Date.now() + 1500;
+      }
+    }
+    // ===== 隱藏磚先揭曉 =====
     if (tg.hidden) {
       tg.hidden = false;
       SFX.fruitCrack();
@@ -757,17 +869,63 @@
                    { speed: 220, life: 0.5, r: 3 });
       return;
     }
-    tg.hp -= 1;
+    // ===== 計算傷害 =====
+    let dmg = 1;
+    if (eff === 'wood')     dmg = 2;
+    if (eff === 'electric') dmg = 2; // 雷擋板的電球
+    if (eff === 'iron')     dmg = 1; // 穿透但只扣 1
+    tg.hp -= dmg;
     if (tg.hp <= 0) {
-      tg.dead = true;
-      tg.fadeT = 0.3;
+      tg.dead = true; tg.fadeT = 0.3;
+      // 福袋球：+50 bonus
+      if (eff === 'lucky') {
+        score += 50;
+        addText(tg.x + tg.w/2, tg.y + tg.h/2 - 14, '🎁 +50', '#7b1fa2');
+      }
       onTargetBroken(tg);
     } else {
-      // 第一下未破：裂痕音效 + 小粒子
       SFX.fruitCrack();
       addParticles(tg.x + tg.w / 2, tg.y + tg.h / 2, fruitJuiceColor(tg), 6,
                    { speed: 160, life: 0.35, r: 3 });
     }
+  }
+
+  // 火球：對碰到的目標周圍 3×3（含對角）範圍內的活著目標各造成 1 hp
+  function igniteNearby(centerTg) {
+    const cx = centerTg.x + centerTg.w / 2, cy = centerTg.y + centerTg.h / 2;
+    for (const t of targets) {
+      if (t.dead || t === centerTg) continue;
+      const dx = (t.x + t.w/2) - cx, dy = (t.y + t.h/2) - cy;
+      // 半徑 = 1.5 個 cell
+      const r = (BLOCK_W + BLOCK_GAP) * 1.5;
+      if (dx*dx + dy*dy <= r*r) {
+        // 不可破/鎖磚 略過
+        if (t.type === 'indestructible' || (t.type === 'lock' && !lockOpen)) continue;
+        // 立即 -1 hp
+        t.hp -= 1;
+        addParticles(t.x + t.w/2, t.y + t.h/2, '#ff6f00', 10, { speed: 200, life: 0.5, r: 3 });
+        if (t.hp <= 0) {
+          t.dead = true; t.fadeT = 0.3;
+          onTargetBroken(t);
+        }
+      }
+    }
+    addParticles(cx, cy, '#ff6f00', 24, { speed: 380, life: 0.7, r: 5 });
+  }
+
+  // 風球：周圍球的角度旋轉 30°
+  function windPush(centerTg) {
+    const rad = Math.PI / 6;
+    const rotate = (b) => {
+      const c = Math.cos(rad), s = Math.sin(rad);
+      const nvx = b.vx * c - b.vy * s;
+      const nvy = b.vx * s + b.vy * c;
+      b.vx = nvx; b.vy = nvy;
+    };
+    rotate(ball);
+    for (const eb of extraBalls) rotate(eb);
+    addParticles(centerTg.x + centerTg.w/2, centerTg.y + centerTg.h/2,
+                 '#80deea', 16, { speed: 280, life: 0.6, r: 4 });
   }
 
   function fruitJuiceColor(tg) {
@@ -907,6 +1065,7 @@
     // 過關獎金：分數入袋（試玩模式不計）
     if (!testingMode && window.MFSB_SHOP) {
       window.MFSB_SHOP.addMoney(score);
+      window.MFSB_SHOP.consumeEquippedPaddle();  // 擋板裝備關卡 -1
     }
     setTimeout(() => {
       // 試玩單張關卡：levelIndex === -1
@@ -1008,7 +1167,7 @@
     SFX.clear();
     addText(W / 2, paddle.y - 40, `${v.emoji} ${v.label}`, v.color);
     if (type === 'wide') {
-      fx.paddleWideT = 10;
+      fx.paddleWideT = 30;       // 從 10 秒延長到 30 秒
       paddle.w = PADDLE_W_BASE * 1.5;
     } else if (type === 'slow') {
       fx.slowT = 8;
@@ -1094,6 +1253,14 @@
     drawBall();
     // 道具
     for (const p of powerups) drawPowerup(p);
+
+    // 光擋板閃光殘留
+    if (lightFlashT > 0) {
+      ctx.globalAlpha = Math.min(1, lightFlashT / 0.3) * 0.6;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+    }
 
     // 粒子
     for (const p of particles) {
@@ -1181,6 +1348,20 @@
   function drawBallAt(b) {
     ctx.save();
     ctx.translate(b.x, b.y);
+    // 攻擊球光暈
+    if (b.effect) {
+      const colorMap = {
+        fire: '#ef5350', ice: '#4fc3f7', wind: '#80deea',
+        wood: '#8d6e63', iron: '#90a4ae',
+        electric: '#ffd54f', lucky: '#ce93d8',
+      };
+      const c = colorMap[b.effect] || '#fff';
+      ctx.shadowColor = c;
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = c;
+      ctx.beginPath(); ctx.arc(0, 0, b.r + 3, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
     // 陰影
     ctx.fillStyle = 'rgba(0,0,0,0.18)';
     ctx.beginPath(); ctx.arc(1.5, 3, b.r, 0, Math.PI * 2); ctx.fill();
@@ -1236,6 +1417,18 @@
     else if (tg.type === 'mover')         drawMover(tg);
     else if (tg.type === 'key')           drawKey(tg);
     else if (tg.type === 'lock')          drawLock(tg);
+
+    // 冰凍視覺
+    if (tg.frozenUntil && Date.now() < tg.frozenUntil) {
+      ctx.fillStyle = 'rgba(129, 212, 250, 0.5)';
+      roundRect(ctx, tg.x, tg.y, tg.w, tg.h, 6); ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(tg.x + 2, tg.y + tg.h/2); ctx.lineTo(tg.x + tg.w - 2, tg.y + tg.h/2);
+      ctx.moveTo(tg.x + tg.w/2, tg.y + 2); ctx.lineTo(tg.x + tg.w/2, tg.y + tg.h - 2);
+      ctx.stroke();
+    }
 
     // 受傷裂痕（鋼磚與多 hp 目標）
     if (tg.hp < tg.maxHp && tg.type !== 'indestructible') {
