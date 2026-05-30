@@ -280,8 +280,10 @@
   let bgTheme = 'warm';
 
   // ===== 輸入控制 =====
-  let pointerActive = false;
+  let pointerActive = false;     // 觸控按住拖曳中
   let pointerX = 0;
+  let paddleFollow = false;      // 擋板是否跟隨 pointerX（滑鼠 hover 或觸控拖曳）
+  let inputMode = 'mouse';       // 'mouse' | 'touch'；偵測到觸控就切 touch（停用滑鼠 hover）
   const keysPressed = { left: false, right: false };
 
   // ===== 音效 =====
@@ -555,13 +557,14 @@
   }
 
   function update(dt) {
-    // 擋板鍵盤
+    // 擋板鍵盤（按鍵時暫時停用滑鼠跟隨，避免互相打架）
     const paddleSpeed = 720;
-    if (keysPressed.left)  paddle.x -= paddleSpeed * dt;
-    if (keysPressed.right) paddle.x += paddleSpeed * dt;
-    if (pointerActive) {
+    if (keysPressed.left)  { paddle.x -= paddleSpeed * dt; paddleFollow = false; }
+    if (keysPressed.right) { paddle.x += paddleSpeed * dt; paddleFollow = false; }
+    // 滑鼠 hover 跟隨 或 觸控按住拖曳：擋板平滑朝 pointerX 移動
+    if (paddleFollow) {
       const target = pointerX - paddle.w / 2;
-      paddle.x += (target - paddle.x) * Math.min(1, dt * 18);
+      paddle.x += (target - paddle.x) * Math.min(1, dt * 22);
     }
     paddle.x = clamp(paddle.x, PLAY_AREA.left, PLAY_AREA.right - paddle.w);
 
@@ -1921,17 +1924,50 @@
     };
   }
 
-  function onPointerDown(e) {
-    if (state === STATE.TITLE || state === STATE.PAUSED ||
-        state === STATE.GAMEOVER || state === STATE.VICTORY ||
-        state === STATE.CLEARED) return;
+  function inPlayableState() {
+    return state === STATE.PLAYING || state === STATE.READY;
+  }
+
+  // ===== 滑鼠：擋板「跟著游標跑」，不用按住；點擊 = 發射 =====
+  function onMouseMove(e) {
+    if (inputMode === 'touch') return;   // 觸控裝置忽略合成的 mouse 事件
+    pointerX = canvasPointFromEvent(e).x;
+    if (inPlayableState()) paddleFollow = true;
+  }
+
+  function onMouseDown(e) {
+    if (inputMode === 'touch') return;
+    if (!inPlayableState()) return;
+    e.preventDefault();
+    pointerX = canvasPointFromEvent(e).x;
+    paddleFollow = true;
+    // 滑鼠模式：移動已靠 hover，點擊純粹用來發射
+    if (state === STATE.READY || (state === STATE.PLAYING && lives > 0)) {
+      launchBall();
+    }
+    ensureAudio();
+  }
+
+  function onMouseLeave() {
+    // 游標移出畫布就停止跟隨，避免去點商店/HUD 時擋板亂飄
+    if (inputMode === 'touch') return;
+    paddleFollow = false;
+  }
+
+  canvas.addEventListener('mousemove', onMouseMove);
+  canvas.addEventListener('mousedown', onMouseDown);
+  canvas.addEventListener('mouseleave', onMouseLeave);
+
+  // ===== 觸控：手指按住拖曳移動擋板（手機沒有 hover） =====
+  function onTouchStart(e) {
+    inputMode = 'touch';
+    if (!inPlayableState()) return;
     e.preventDefault();
     const p = canvasPointFromEvent(e);
     pointerActive = true;
+    paddleFollow = true;
     pointerX = p.x;
-    // 連射規則：
-    //   READY 狀態任何位置點都發射
-    //   PLAYING 狀態只有「擋板上方 60px 以外」算發射，貼擋板拖視為移動
+    // 連射規則：READY 任何位置點都發射；PLAYING 點擋板上方 60px 以外才發射（貼擋板拖視為移動）
     if (state === STATE.READY) {
       launchBall();
     } else if (state === STATE.PLAYING && p.y < paddle.y - 60 && lives > 0) {
@@ -1940,22 +1976,21 @@
     ensureAudio();
   }
 
-  function onPointerMove(e) {
+  function onTouchMove(e) {
     if (!pointerActive) return;
     e.preventDefault();
     pointerX = canvasPointFromEvent(e).x;
   }
 
-  function onPointerUp() { pointerActive = false; }
+  function onTouchEnd() {
+    pointerActive = false;
+    paddleFollow = false;   // 觸控放手後擋板停在原地
+  }
 
-  canvas.addEventListener('mousedown', onPointerDown);
-  window.addEventListener('mousemove', onPointerMove);
-  window.addEventListener('mouseup', onPointerUp);
-
-  canvas.addEventListener('touchstart', onPointerDown, { passive: false });
-  canvas.addEventListener('touchmove', onPointerMove,  { passive: false });
-  canvas.addEventListener('touchend', onPointerUp);
-  canvas.addEventListener('touchcancel', onPointerUp);
+  canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+  canvas.addEventListener('touchmove', onTouchMove,  { passive: false });
+  canvas.addEventListener('touchend', onTouchEnd);
+  canvas.addEventListener('touchcancel', onTouchEnd);
 
   // 鍵盤
   window.addEventListener('keydown', (e) => {
